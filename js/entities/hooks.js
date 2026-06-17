@@ -8,5 +8,6 @@ export const hooks = {
     getCritChance: null,
     getCritMultiplier: null,
     getWeaponDamage: null,
-    addBloodSplatterToBg: null
+    addBloodSplatterToBg: null,
+    addToxicSplatterToBg: null
 };

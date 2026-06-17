@@ -12,11 +12,14 @@ export class Bullet {
     constructor() {
         this.active = false;
     }
-    spawn(x, y, targetX, targetY, damage, isCrit, speed = 10, isPlasma = false, isShotgun = false, phase = 1, customAngle = null, isGatling = false, isTesla = false, isNuclear = false, isFlame = false, isFreeze = false) {
+    spawn(x, y, targetX, targetY, damage, isCrit, speed = 10, isPlasma = false, isShotgun = false, phase = 1, customAngle = null, isGatling = false, isTesla = false, isNuclear = false, isFlame = false, isFreeze = false, maxRange = Infinity) {
         this.x = x;
         this.y = y;
         this.prevX = x;
         this.prevY = y;
+        this.startX = x;
+        this.startY = y;
+        this.maxRange = maxRange;
         this.z = 0;
         this.vz = 0;
         this.damage = damage;
@@ -51,10 +54,10 @@ export class Bullet {
         } else if (isFreeze) {
             this.knockback = 0;
         } else {
-            if (this.speed === 34) this.knockback = 7.5; // rifle
-            else if (this.speed === 26) this.knockback = 2.8; // smg
+            if (this.speed === 52) this.knockback = 7.5; // rifle
+            else if (this.speed === 42) this.knockback = 2.8; // smg
             else if (this.speed === 36) this.knockback = 16.0; // sniper
-            else if (this.speed === 22) this.knockback = 4.5; // pistol
+            else if (this.speed === 38) this.knockback = 4.5; // pistol
             else this.knockback = 5.0;
         }
 
@@ -109,6 +112,20 @@ export class Bullet {
         this.screenX += this.screenVx * dt * 60;
         this.screenY += this.screenVy * dt * 60;
 
+        if (this.maxRange !== Infinity) {
+            const dx = this.x - this.startX;
+            const dy = this.y - this.startY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist >= this.maxRange) {
+                if (this.isNuclear) {
+                    this.explode();
+                } else {
+                    this.active = false;
+                }
+                return;
+            }
+        }
+
         if (this.isNuclear) {
             this.vz -= 0.28 * dt * 60;
             this.z += this.vz * dt * 60;
@@ -143,6 +160,26 @@ export class Bullet {
         if (this.isFlame) {
             const ageRatio = 1.0 - (this.life / 0.35);
             this.size = 4 + ageRatio * 20;
+            
+            // Spawn orange/red fading particles as flame embers/smoke
+            if (Math.random() < 0.28 * (dt * 60)) {
+                const p = getAvailableParticle();
+                if (p) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const spd = Math.random() * 1.6;
+                    p.spawn(
+                        this.x + (Math.random() - 0.5) * 8, 
+                        this.y + (Math.random() - 0.5) * 8, 
+                        Math.cos(angle) * spd - this.vx * 0.15, 
+                        Math.sin(angle) * spd - this.vy * 0.15, 
+                        Math.random() < 0.55 ? '#f97316' : '#ef4444', 
+                        Math.random() * 2.2 + 1.2, 
+                        Math.random() * 0.28 + 0.14,
+                        0.0,
+                        'spark'
+                    );
+                }
+            }
         }
 
         if (this.isShotgun && this.phase < 3) {
@@ -152,7 +189,7 @@ export class Bullet {
             }
         }
 
-        if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) {
+        if (this.x < -50 || this.x > canvas.clientWidth + 50 || this.y < -50 || this.y > canvas.clientHeight + 50) {
             this.active = false;
         }
 
@@ -194,6 +231,9 @@ export class Bullet {
         const nextPhase = this.phase + 1;
         const nextDamage = Math.max(1, Math.round(this.damage / 2));
         
+        const traveled = Math.sqrt((this.x - this.startX)*(this.x - this.startX) + (this.y - this.startY)*(this.y - this.startY));
+        const remainingRange = Math.max(0, this.maxRange - traveled);
+        
         const angles = [baseAngle - 0.10, baseAngle + 0.10];
         angles.forEach(ang => {
             const b = getAvailableBullet();
@@ -208,7 +248,9 @@ export class Bullet {
                     false, 
                     true, 
                     nextPhase, 
-                    ang
+                    ang,
+                    false, false, false, false, false,
+                    remainingRange
                 );
             }
         });

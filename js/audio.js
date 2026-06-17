@@ -440,3 +440,24 @@ export function playDefeatDrone() {
         } catch(e) {}
     }
 }
+
+export function playHoverBeep() {
+    if (audioMuted.value) return;
+    if (audioInitialized.value && audioNodes.chimeSynth) {
+        try {
+            const now = Tone.now();
+            audioNodes.chimeSynth.triggerAttackRelease("C6", "64n", now, 0.12);
+        } catch(e) {}
+    }
+}
+
+export function playTabClick() {
+    if (audioMuted.value) return;
+    if (audioInitialized.value && audioNodes.chimeSynth) {
+        try {
+            const now = Tone.now();
+            audioNodes.chimeSynth.triggerAttackRelease("G4", "32n", now, 0.25);
+            audioNodes.chimeSynth.triggerAttackRelease("C5", "32n", now + 0.04, 0.25);
+        } catch(e) {}
+    }
+}

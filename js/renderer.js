@@ -1,1 +1,1 @@
-export { initTextPool, initPixi, initBgCanvas, addBloodSplatterToBg, drawBarricadePixi, drawPlayerPixi, drawMercsPixi, drawBulletsPixi, drawParticlesPixi, drawBombersPixi, drawAmbientPixi, drawGame } from './renderer/Renderer.js';
+export { initTextPool, initPixi, initBgCanvas, addBloodSplatterToBg, addToxicSplatterToBg, drawBarricadePixi, drawPlayerPixi, drawMercsPixi, drawBulletsPixi, drawParticlesPixi, drawBombersPixi, drawAmbientPixi, drawGame } from './renderer/Renderer.js';

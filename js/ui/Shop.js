@@ -76,33 +76,36 @@ export function renderShop() {
             
             const clipVal = w.clipSize ?? INITIAL_GAME_STATE.weapons[index].clipSize;
             const reloadSec = w.reloadTime ?? INITIAL_GAME_STATE.weapons[index].reloadTime;
+            const shootInt = w.shootInterval ?? INITIAL_GAME_STATE.weapons[index].shootInterval;
+            const rps = (1 / shootInt).toFixed(1);
             
             html += `
-            <div class="bg-zinc-950 border ${activeMark ? 'border-red-600/50 shadow-[0_0_12px_rgba(239,68,68,0.1)]' : 'border-zinc-900'} p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800">
+            <div class="shop-card bg-zinc-950 border ${activeMark ? 'border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.22)]' : 'border-zinc-900'} p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800" onmouseenter="if(window.game && window.game.playHoverBeep) window.game.playHoverBeep()">
                 <div class="flex items-center justify-between gap-3">
                     <div class="flex-1">
                         <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="text-sm font-bold font-tech ${isUnlocked ? 'text-zinc-200' : 'text-zinc-500'}">${w.name}</span>
-                            ${activeMark ? '<span class="px-1.5 py-0.2 bg-red-600/10 border border-red-500/20 text-red-500 text-[9px] font-black rounded uppercase">ACTIVE</span>' : ''}
+                            <span class="text-sm font-bold font-tech ${isUnlocked ? 'text-zinc-200' : 'text-zinc-550'}">${w.name}</span>
+                            ${activeMark ? '<span class="px-1.5 py-0.2 bg-amber-600/10 border border-amber-500/20 text-amber-500 text-[9px] font-black rounded uppercase glow-amber animate-pulse">ACTIVE</span>' : ''}
                         </div>
                         <p class="text-xs text-zinc-400 mt-1">
                             Cấp: <span class="text-white font-bold font-tech">${w.level}</span> | 
                             ST: <span class="text-orange-400 font-bold font-tech">${currentDmg}</span> 
                             ${isUnlocked ? `➔ <span class="text-emerald-400 font-bold font-tech">${nextLvlDmg}</span>` : ''}
                         </p>
-                        <p class="text-[11px] text-zinc-500 mt-0.5">
+                        <p class="text-[11px] text-zinc-550 mt-0.5">
                             Băng đạn: <span class="text-yellow-500 font-bold font-tech">${clipVal} viên</span> | 
-                            Nạp đạn: <span class="text-red-400 font-bold font-tech">${reloadSec}s</span>
+                            Tốc độ: <span class="text-orange-400 font-bold font-tech">${rps}/s</span> | 
+                            Nạp: <span class="text-red-400 font-bold font-tech">${reloadSec}s</span>
                         </p>
                     </div>
                     <div>
                         ${!isUnlocked ? `
-                            <button data-cost="${cost}" data-currency="gold" data-active-class="bg-yellow-500 text-black hover:bg-yellow-400" onclick="window.game.unlockWeapon(${index})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-yellow-500 text-black hover:bg-yellow-400' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                            <button data-cost="${cost}" data-currency="gold" data-active-class="bg-amber-500 text-black hover:bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]" onclick="window.game.unlockWeapon(${index})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 scifi-btn-glow ${canAfford ? 'bg-amber-500 text-black hover:bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                                 Mở: 🪙${formatNumber(cost)}
                             </button>
                         ` : `
                             <div class="flex flex-col gap-1">
-                                <button data-cost="${cost}" data-currency="gold" data-active-class="bg-red-600 text-white hover:bg-red-500" onclick="window.game.upgradeWeapon(${index})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                                <button data-cost="${cost}" data-currency="gold" data-active-class="bg-amber-655 text-white hover:bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]" onclick="window.game.upgradeWeapon(${index})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 scifi-btn-glow ${canAfford ? 'bg-amber-655 text-white hover:bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                                     Cấp+: 🪙${formatNumber(cost)}
                                 </button>
                                 ${!activeMark ? `
@@ -135,16 +138,16 @@ export function renderShop() {
         upgrades.forEach(u => {
             const canAfford = currentGold >= u.cost;
             html += `
-            <div class="bg-zinc-950 border border-zinc-900 p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800">
+            <div class="shop-card bg-zinc-950 border border-zinc-900 p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800" onmouseenter="if(window.game && window.game.playHoverBeep) window.game.playHoverBeep()">
                 <div class="flex items-center justify-between gap-3">
                     <div class="flex-1 flex items-center gap-2.5">
-                        <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-850 flex items-center justify-center text-red-500 text-sm"><i class="fa-solid ${u.icon}"></i></div>
+                        <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-850 flex items-center justify-center text-cyan-400 text-sm shadow-[inset_0_0_6px_rgba(6,182,212,0.1)]"><i class="fa-solid ${u.icon}"></i></div>
                         <div>
                             <span class="text-sm font-bold font-tech block text-zinc-200">${u.name}</span>
                             <p class="text-xs text-zinc-400 mt-0.5">Cấp: <span class="text-white font-bold font-tech">${u.current}</span></p>
                         </div>
                     </div>
-                    <button data-cost="${u.cost}" data-currency="gold" data-active-class="bg-red-600 text-white hover:bg-red-500" onclick="window.game.upgradeDefense('${u.key}', ${u.cost}, ${u.pseudoLvl})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                    <button data-cost="${u.cost}" data-currency="gold" data-active-class="bg-cyan-600 text-white hover:bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.2)]" onclick="window.game.upgradeDefense('${u.key}', ${u.cost}, ${u.pseudoLvl})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 scifi-btn-glow ${canAfford ? 'bg-cyan-600 text-white hover:bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                         Nâng: 🪙${formatNumber(u.cost)}
                     </button>
                 </div>
@@ -177,17 +180,20 @@ export function renderShop() {
             }
  
             html += `
-            <div class="bg-zinc-950 border border-zinc-900 p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800">
+            <div class="shop-card bg-zinc-950 border border-zinc-900 p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800" onmouseenter="if(window.game && window.game.playHoverBeep) window.game.playHoverBeep()">
                 <div class="flex items-center justify-between gap-3">
-                    <div class="flex-1">
-                        <span class="text-sm font-bold font-tech text-zinc-200 block">${m.name}</span>
-                        <p class="text-xs text-zinc-400 mt-1">
-                            Cấp: <span class="text-white font-bold font-tech">${m.level}</span> | 
-                            Tác chiến: <span class="text-orange-400 font-bold font-tech">${isHired ? currentStat : 'Chưa Thuê'}</span>
-                            ${isHired ? `➔ <span class="text-emerald-400 font-bold font-tech">${nextStat}</span>` : ''}
-                        </p>
+                    <div class="flex-1 flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-850 flex items-center justify-center text-purple-400 text-sm shadow-[inset_0_0_6px_rgba(168,85,247,0.1)]"><i class="fa-solid fa-user-shield"></i></div>
+                        <div>
+                            <span class="text-sm font-bold font-tech text-zinc-200 block">${m.name}</span>
+                            <p class="text-xs text-zinc-400 mt-1">
+                                Cấp: <span class="text-white font-bold font-tech">${m.level}</span> | 
+                                Tác chiến: <span class="text-orange-400 font-bold font-tech">${isHired ? currentStat : 'Chưa Thuê'}</span>
+                                ${isHired ? `➔ <span class="text-emerald-400 font-bold font-tech">${nextStat}</span>` : ''}
+                            </p>
+                        </div>
                     </div>
-                    <button data-cost="${cost}" data-currency="gold" data-active-class="bg-red-600 text-white hover:bg-red-500" onclick="window.game.hireOrUpgradeMerc(${idx})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                    <button data-cost="${cost}" data-currency="gold" data-active-class="bg-purple-650 text-white hover:bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.2)]" onclick="window.game.hireOrUpgradeMerc(${idx})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 scifi-btn-glow ${canAfford ? 'bg-purple-650 text-white hover:bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.2)]' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                         ${isHired ? 'Nâng' : 'Thuê'}: 🪙${formatNumber(cost)}
                     </button>
                 </div>
@@ -204,13 +210,16 @@ export function renderShop() {
             const boostPercent = (mut.level * mut.mult * 100).toFixed(0);
             
             html += `
-            <div class="bg-zinc-950 border border-emerald-950/40 p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800">
+            <div class="shop-card bg-zinc-950 border border-emerald-950/40 p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800" onmouseenter="if(window.game && window.game.playHoverBeep) window.game.playHoverBeep()">
                 <div class="flex items-center justify-between gap-3">
-                    <div class="flex-1">
-                        <span class="text-sm font-bold font-tech text-emerald-400 block">${mut.name}</span>
-                        <p class="text-xs text-zinc-400 mt-1">Đột biến: <span class="text-white font-bold font-tech">${mut.level}</span> (Hiệu quả: <span class="text-emerald-400 font-bold">+${boostPercent}%</span>)</p>
+                    <div class="flex-1 flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-emerald-950/30 flex items-center justify-center text-emerald-400 text-sm shadow-[inset_0_0_6px_rgba(16,185,129,0.1)]"><i class="fa-solid fa-dna"></i></div>
+                        <div>
+                            <span class="text-sm font-bold font-tech text-emerald-400 block">${mut.name}</span>
+                            <p class="text-xs text-zinc-400 mt-1">Đột biến: <span class="text-white font-bold font-tech">${mut.level}</span> (Hiệu quả: <span class="text-emerald-400 font-bold">+${boostPercent}%</span>)</p>
+                        </div>
                     </div>
-                    <button data-cost="${cost}" data-currency="dna" data-active-class="bg-emerald-600 text-white hover:bg-emerald-500" onclick="window.game.evolveMutation('${k}', ${cost})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                    <button data-cost="${cost}" data-currency="dna" data-active-class="bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]" onclick="window.game.evolveMutation('${k}', ${cost})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 scifi-btn-glow ${canAfford ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                         Gen: 🧬${cost}
                     </button>
                 </div>

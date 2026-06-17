@@ -61,6 +61,89 @@ export function addGold(amount) {
     gameState.gold += amount;
 }
 
+export function getActiveWeaponRange(weaponId) {
+    switch (weaponId) {
+        case 'flame': return 320;
+        case 'shotgun': return 400;
+        case 'tesla': return 500;
+        case 'freeze': return 600;
+        case 'pistol': return 700;
+        case 'smg': return 800;
+        case 'gatling': return 950;
+        case 'plasma': return 1000;
+        case 'rifle': return 1200;
+        case 'nuclear': return 1300;
+        default: return 800;
+    }
+}
+
+export function getMercenaryRange(mercId) {
+    switch (mercId) {
+        case 'merc_recruit': return 700;
+        case 'merc_sniper': return 1400;
+        case 'merc_gunner': return 950;
+        case 'merc_drone': return 900;
+        default: return 700;
+    }
+}
+
+function spawnMuzzleSparks(x, y, angle, wepId) {
+    let count = 4;
+    let color = '#facc15'; // default yellow spark
+    let spread = 0.4;
+    let speedBase = 6;
+    
+    if (wepId === 'shotgun') {
+        count = 12;
+        spread = 0.65;
+        speedBase = 8;
+    } else if (wepId === 'plasma') {
+        count = 6;
+        color = '#22d3ee'; // Cyan plasma spark
+        spread = 0.5;
+        speedBase = 7;
+    } else if (wepId === 'tesla') {
+        count = 5;
+        color = '#06b6d4'; // Cyan/Blue electric spark
+        spread = 0.8;
+        speedBase = 5;
+    } else if (wepId === 'flame') {
+        count = 2;
+        color = '#f97316'; // Flame spark
+        spread = 0.3;
+        speedBase = 4;
+    } else if (wepId === 'nuclear') {
+        count = 15;
+        color = '#4ade80'; // Green nuclear sparks
+        spread = 0.7;
+        speedBase = 10;
+    } else if (wepId === 'freeze') {
+        count = 5;
+        color = '#38bdf8'; // Blue freeze spark
+        spread = 0.5;
+        speedBase = 6;
+    }
+    
+    for (let i = 0; i < count; i++) {
+        const p = getAvailableParticle();
+        if (p) {
+            const a = angle + (Math.random() - 0.5) * spread;
+            const speed = Math.random() * speedBase + (speedBase * 0.4);
+            p.spawn(
+                x, 
+                y, 
+                Math.cos(a) * speed, 
+                Math.sin(a) * speed, 
+                color, 
+                Math.random() * 2.2 + 1.0, 
+                Math.random() * 0.22 + 0.12, 
+                0.0, 
+                'spark'
+            );
+        }
+    }
+}
+
 export function triggerAutomaticFire(manualAngle = null) {
     if (gameState.isDefeated || isReloading.value) return;
     initAudioEngine();
@@ -68,20 +151,41 @@ export function triggerAutomaticFire(manualAngle = null) {
     const activeWep = gameState.weapons[gameState.activeWeaponIndex];
     if (!activeWep) return;
     
+    const range = getActiveWeaponRange(activeWep.id);
     let target = null;
     let baseAngle = 0;
 
-    const startX = player.x + Math.cos(player.angle) * 12;
-    const startY = player.y + Math.sin(player.angle) * 12;
-
+    // 1. Calculate aiming angle based on player center
     if (manualAngle !== null) {
-        // Bắn thủ công bằng chuột: tính toán góc bay chính xác từ đầu nòng súng tới trỏ chuột
+        baseAngle = manualAngle;
+    } else {
+        target = getPrioritizedZombie(player.x, player.y - 4, range);
+        if (!target) return;
+        baseAngle = Math.atan2(target.y - (player.y - 4), target.x - player.x);
+    }
+
+    // 2. Compute exact starting coordinates at the muzzle (barrel tip)
+    let gunH = 12, barrelExt = 5;
+    switch (activeWep.id) {
+        case 'pistol':   gunH = 8;  barrelExt = 5;  break;
+        case 'smg':      gunH = 13; barrelExt = 4;  break;
+        case 'shotgun':  gunH = 15; barrelExt = 5;  break;
+        case 'rifle':    gunH = 18; barrelExt = 6;  break;
+        case 'flame':    gunH = 12; barrelExt = 4;  break;
+        case 'plasma':   gunH = 16; barrelExt = 5;  break;
+        case 'freeze':   gunH = 14; barrelExt = 5;  break;
+        case 'gatling':  gunH = 18; barrelExt = 8;  break;
+        case 'tesla':    gunH = 17; barrelExt = 6;  break;
+        case 'nuclear':  gunH = 20; barrelExt = 7;  break;
+    }
+    const gunLength = 10 + gunH + barrelExt;
+    const startX = player.x + Math.cos(baseAngle) * gunLength;
+    const startY = player.y - 4 + Math.sin(baseAngle) * gunLength;
+
+    // 3. Recalculate precise angle from muzzle to mouse for manual firing
+    if (manualAngle !== null) {
         const worldMouse = unproject3D(mousePosition.x, mousePosition.y);
         baseAngle = Math.atan2(worldMouse.y - startY, worldMouse.x - startX);
-    } else {
-        target = getPrioritizedZombie();
-        if (!target) return;
-        baseAngle = Math.atan2(target.y - startY, target.x - startX);
     }
     
     if (activeWep.currentClip === undefined) {
@@ -159,7 +263,7 @@ export function triggerAutomaticFire(manualAngle = null) {
             const b = getAvailableBullet();
             if (b) {
                 const speed = 32 + Math.random() * 6;
-                b.spawn(startX, startY, 0, 0, damagePerPellet, isCrit, speed, false, true, 1, pelletAngle);
+                b.spawn(startX, startY, 0, 0, damagePerPellet, isCrit, speed, false, true, 1, pelletAngle, false, false, false, false, false, range);
             }
         }
     } else if (activeWep.id === 'flame') {
@@ -167,39 +271,40 @@ export function triggerAutomaticFire(manualAngle = null) {
         const flameAngle = baseAngle + flameSpread;
         const b = getAvailableBullet();
         if (b) {
-            b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 12, false, false, 1, flameAngle, false, false, false, true, false);
+            b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 12, false, false, 1, flameAngle, false, false, false, true, false, range);
             b.life = 0.35;
         }
     } else if (activeWep.id === 'freeze') {
         const b = getAvailableBullet();
-        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 18, false, false, 1, angle, false, false, false, false, true);
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 18, false, false, 1, angle, false, false, false, false, true, range);
     } else if (activeWep.id === 'plasma') {
         const b = getAvailableBullet();
-        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 34, true, false, 1, angle);
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 34, true, false, 1, angle, false, false, false, false, false, range);
     } else if (activeWep.id === 'gatling') {
         const b = getAvailableBullet();
-        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 48, false, false, 1, angle, true);
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 48, false, false, 1, angle, true, false, false, false, false, range);
     } else if (activeWep.id === 'tesla') {
         const b = getAvailableBullet();
-        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 55, false, false, 1, angle, false, true, false);
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 55, false, false, 1, angle, false, true, false, false, false, range);
     } else if (activeWep.id === 'nuclear') {
         const b = getAvailableBullet();
-        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 10, false, false, 1, angle, false, false, true);
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 10, false, false, 1, angle, false, false, true, false, false, range);
     } else if (activeWep.id === 'rifle') {
         const b = getAvailableBullet();
-        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 52, false, false, 1, angle);
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 52, false, false, 1, angle, false, false, false, false, false, range);
     } else if (activeWep.id === 'smg') {
         const b = getAvailableBullet();
-        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 42, false, false, 1, angle);
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 42, false, false, 1, angle, false, false, false, false, false, range);
     } else if (activeWep.id === 'pistol') {
         const b = getAvailableBullet();
-        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 38, false, false, 1, angle);
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 38, false, false, 1, angle, false, false, false, false, false, range);
     } else {
         const b = getAvailableBullet();
-        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 38, false, false, 1, angle);
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 38, false, false, 1, angle, false, false, false, false, false, range);
     }
     
     activeFlashes.push({ x: startX, y: startY, life: 0.05 });
+    spawnMuzzleSparks(startX, startY, baseAngle, activeWep.id);
     
     if (activeWep.id !== 'flame' && activeWep.id !== 'plasma' && activeWep.id !== 'tesla') {
         const p = getAvailableParticle();
@@ -238,10 +343,88 @@ export function triggerOverclock() {
 }
 
 export function updateMercenary(m, dt) {
-    if (m.id === 'merc_medic') return; 
+    // Ensure position is initialized dynamically
+    if (m.x === undefined) {
+        const barricadeY = canvas.clientHeight - 160;
+        m.y = barricadeY + 30;
+        if (m.id === 'merc_recruit') m.x = canvas.clientWidth * 0.20;
+        else if (m.id === 'merc_sniper') m.x = canvas.clientWidth * 0.35;
+        else if (m.id === 'merc_gunner') m.x = canvas.clientWidth * 0.65;
+        else if (m.id === 'merc_medic') m.x = canvas.clientWidth * 0.80;
+        else if (m.id === 'merc_drone') m.x = canvas.clientWidth * 0.92;
+        else m.x = canvas.clientWidth * 0.5;
+        
+        m.angle = -Math.PI / 2;
+        m.screenAngle = -Math.PI / 2;
+        m.walkCycle = 0;
+        m.speed = 110;
+        m.targetX = m.x;
+    }
+
+    const activeWep = gameState.weapons[gameState.activeWeaponIndex];
+    if (!activeWep) return;
+
+    if (m.flashTimer > 0) {
+        m.flashTimer -= dt;
+    }
+    m.recoil = Math.max(0, (m.recoil || 0) - dt * 45);
+
+    // Range inherits from the player's active weapon range
+    const range = getActiveWeaponRange(activeWep.id);
+    const target = getPrioritizedZombie(m.x, m.y, range);
+    
+    if (m.id === 'merc_drone') {
+        const homeX = canvas.clientWidth * 0.92;
+        m.targetX = target ? target.x : homeX;
+        m.targetX = Math.max(canvas.clientWidth * 0.60, Math.min(canvas.clientWidth * 0.96, m.targetX));
+        
+        const dx = m.targetX - m.x;
+        if (Math.abs(dx) > 1) {
+            m.x += dx * 0.04 * (dt * 60);
+        }
+        if (target) {
+            m.angle = Math.atan2(target.y - m.y, target.x - m.x);
+        } else {
+            m.angle = m.angle * 0.95 + (-Math.PI / 2) * 0.05;
+        }
+    } else {
+        // Human mercenaries (Jack, Sniper, Gunner, Medic)
+        let homeX = canvas.clientWidth * 0.5;
+        if (m.id === 'merc_recruit') homeX = canvas.clientWidth * 0.20;
+        else if (m.id === 'merc_sniper') homeX = canvas.clientWidth * 0.35;
+        else if (m.id === 'merc_gunner') homeX = canvas.clientWidth * 0.65;
+        else if (m.id === 'merc_medic') homeX = canvas.clientWidth * 0.80;
+        
+        if (target) {
+            m.targetX = target.x;
+            m.targetX = Math.max(homeX - 110, Math.min(homeX + 110, m.targetX));
+            m.angle = Math.atan2(target.y - m.y, target.x - m.x);
+            m.screenAngle = m.angle;
+        } else {
+            m.targetX = homeX;
+            m.angle = m.angle * 0.95 + (-Math.PI / 2) * 0.05;
+            m.screenAngle = m.screenAngle * 0.95 + (-Math.PI / 2) * 0.05;
+        }
+        
+        const dx = m.targetX - m.x;
+        if (Math.abs(dx) > 3) {
+            const step = Math.sign(dx) * m.speed * dt;
+            m.x += Math.abs(dx) < Math.abs(step) ? dx : step;
+            m.walkCycle += dt * 12;
+        } else {
+            m.walkCycle = 0;
+        }
+        
+        const minMercX = canvas.clientWidth * 0.05;
+        const maxMercX = canvas.clientWidth * 0.95;
+        m.x = Math.max(minMercX, Math.min(maxMercX, m.x));
+    }
+
+    // Fire rate inherits player's active weapon fire speed
+    const shootSpeedInterval = activeWep.shootInterval || 0.5;
+    const fireInterval = activeSkillsDuration.overclock > 0 ? (shootSpeedInterval * 0.35) : shootSpeedInterval;
 
     m.fireTimer = (m.fireTimer || 0) + dt;
-    const fireInterval = m.id === 'merc_sniper' ? 1.5 : (m.id === 'merc_gunner' ? 0.14 : (m.id === 'merc_drone' ? 0.35 : 0.75)); 
 
     if (m.fireTimer >= fireInterval) {
         m.fireTimer = 0;
@@ -251,49 +434,140 @@ export function updateMercenary(m, dt) {
 
 export function shootMercenary(m, fireInterval) {
     if (zombies.length === 0 || gameState.isDefeated) return;
+    if (m.x === undefined) return;
     
-    let target = getPrioritizedZombie();
+    const activeWep = gameState.weapons[gameState.activeWeaponIndex];
+    if (!activeWep) return;
+    
+    const range = getActiveWeaponRange(activeWep.id);
+    let target = getPrioritizedZombie(m.x, m.y, range);
     if (!target) return;
 
+    // Inherit player's active weapon damage
+    const baseDamage = getWeaponDamage(activeWep);
     const levelPowerMult = Math.pow(1.22 + (m.level * 0.003), m.level - 1);
-    let dps = m.baseDps * levelPowerMult;
+    let totalDmg = baseDamage * levelPowerMult;
     
     const hiredPowerLvl = gameState.mutations.dnaHiredPower ? gameState.mutations.dnaHiredPower.level : 0;
     const hiredPowerMod = 1 + (hiredPowerLvl * (gameState.mutations.dnaHiredPower ? gameState.mutations.dnaHiredPower.mult : 0.25));
-    dps *= hiredPowerMod;
+    totalDmg *= hiredPowerMod;
 
-    const damagePerShot = Math.max(1, Math.round(dps * fireInterval));
-    
-    const barricadeY = canvas.height - 160;
-    const allyY = barricadeY + 30;
-    let allyX = canvas.width * 0.5;
-    if (m.id === 'merc_recruit') allyX = canvas.width * 0.20;
-    else if (m.id === 'merc_sniper') allyX = canvas.width * 0.35;
-    else if (m.id === 'merc_gunner') allyX = canvas.width * 0.65;
-    else if (m.id === 'merc_medic') allyX = canvas.width * 0.80;
-    else if (m.id === 'merc_drone') allyX = canvas.width * 0.92;
-    
     const isCrit = Math.random() < 0.08; 
-    const finalDamage = Math.round(damagePerShot * (isCrit ? 1.5 : 1.0));
+    const finalDamage = Math.round(totalDmg * (isCrit ? 1.5 : 1.0));
 
-    const b = getAvailableBullet();
-    if (b) {
-        let speed = 22;
-        if (m.id === 'merc_soldier') speed = 38;
-        else if (m.id === 'merc_sniper') speed = 65;
-        else if (m.id === 'merc_gunner') speed = 45;
-        else if (m.id === 'merc_drone') speed = 34;
-
-        b.spawn(allyX, allyY, target.x, target.y, finalDamage, isCrit, speed, false);
-        if (m.id === 'merc_drone') {
-            b.isPlasma = true;
-        }
+    let gunH = 12, barrelExt = 5;
+    switch (activeWep.id) {
+        case 'pistol':   gunH = 8;  barrelExt = 5;  break;
+        case 'smg':      gunH = 13; barrelExt = 4;  break;
+        case 'shotgun':  gunH = 15; barrelExt = 5;  break;
+        case 'rifle':    gunH = 18; barrelExt = 6;  break;
+        case 'flame':    gunH = 12; barrelExt = 4;  break;
+        case 'plasma':   gunH = 16; barrelExt = 5;  break;
+        case 'freeze':   gunH = 14; barrelExt = 5;  break;
+        case 'gatling':  gunH = 18; barrelExt = 8;  break;
+        case 'tesla':    gunH = 17; barrelExt = 6;  break;
+        case 'nuclear':  gunH = 20; barrelExt = 7;  break;
+    }
+    let gunLength = 10 + gunH + barrelExt;
+    let yOffset = -4;
+    if (m.id === 'merc_drone') {
+        gunLength = 12;
+        yOffset = 0;
     }
     
-    if (m.id !== 'merc_drone') {
+    const mercAngle = Math.atan2(target.y - m.y, target.x - m.x);
+    const startX = m.x + Math.cos(mercAngle) * gunLength;
+    const startY = m.y + yOffset + Math.sin(mercAngle) * gunLength;
+
+    let baseSpread = 0.01;
+    switch (activeWep.id) {
+        case 'pistol': baseSpread = 0.015; break;
+        case 'smg': baseSpread = 0.035; break;
+        case 'shotgun': baseSpread = 0.06; break;
+        case 'rifle': baseSpread = 0.01; break;
+        case 'flame': baseSpread = 0.12; break;
+        case 'plasma': baseSpread = 0.005; break;
+        case 'freeze': baseSpread = 0.018; break;
+        case 'gatling': baseSpread = 0.045; break;
+        case 'tesla': baseSpread = 0.02; break;
+        case 'nuclear': baseSpread = 0.00; break;
+    }
+    const spreadOffset = (Math.random() - 0.5) * baseSpread;
+    const angle = mercAngle + spreadOffset;
+
+    let recoilAmt = 4.0;
+    switch (activeWep.id) {
+        case 'pistol': recoilAmt = 2.8; break;
+        case 'smg': recoilAmt = 1.5; break;
+        case 'shotgun': recoilAmt = 16.0; break;
+        case 'rifle': recoilAmt = 4.0; break;
+        case 'flame': recoilAmt = 0.15; break;
+        case 'plasma': recoilAmt = 8.0; break;
+        case 'freeze': recoilAmt = 2.5; break;
+        case 'gatling': recoilAmt = 1.8; break;
+        case 'tesla': recoilAmt = 0.8; break;
+        case 'nuclear': recoilAmt = 25.0; break;
+    }
+    m.recoil = recoilAmt;
+    m.flashTimer = 0.05;
+
+    // Inherit player's active weapon projectile mechanics
+    if (activeWep.id === 'shotgun') {
+        const pelletCount = 15;
+        const damagePerPellet = Math.max(1, Math.round(finalDamage / pelletCount));
+        for (let i = 0; i < pelletCount; i++) {
+            const randomOffset = (Math.random() - 0.5) * 0.20;
+            const pelletAngle = mercAngle + randomOffset;
+            const b = getAvailableBullet();
+            if (b) {
+                const speed = 32 + Math.random() * 6;
+                b.spawn(startX, startY, 0, 0, damagePerPellet, isCrit, speed, false, true, 1, pelletAngle, false, false, false, false, false, range);
+            }
+        }
+    } else if (activeWep.id === 'flame') {
+        const flameSpread = (Math.random() - 0.5) * 0.26;
+        const flameAngle = mercAngle + flameSpread;
+        const b = getAvailableBullet();
+        if (b) {
+            b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 12, false, false, 1, flameAngle, false, false, false, true, false, range);
+            b.life = 0.35;
+        }
+    } else if (activeWep.id === 'freeze') {
+        const b = getAvailableBullet();
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 18, false, false, 1, angle, false, false, false, false, true, range);
+    } else if (activeWep.id === 'plasma') {
+        const b = getAvailableBullet();
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 34, true, false, 1, angle, false, false, false, false, false, range);
+    } else if (activeWep.id === 'gatling') {
+        const b = getAvailableBullet();
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 48, false, false, 1, angle, true, false, false, false, false, range);
+    } else if (activeWep.id === 'tesla') {
+        const b = getAvailableBullet();
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 55, false, false, 1, angle, false, true, false, false, false, range);
+    } else if (activeWep.id === 'nuclear') {
+        const b = getAvailableBullet();
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 10, false, false, 1, angle, false, false, true, false, false, range);
+    } else if (activeWep.id === 'rifle') {
+        const b = getAvailableBullet();
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 52, false, false, 1, angle, false, false, false, false, false, range);
+    } else if (activeWep.id === 'smg') {
+        const b = getAvailableBullet();
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 42, false, false, 1, angle, false, false, false, false, false, range);
+    } else if (activeWep.id === 'pistol') {
+        const b = getAvailableBullet();
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 38, false, false, 1, angle, false, false, false, false, false, range);
+    } else {
+        const b = getAvailableBullet();
+        if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 38, false, false, 1, angle, false, false, false, false, false, range);
+    }
+    
+    spawnMuzzleSparks(startX, startY, mercAngle, activeWep.id);
+    
+    if (activeWep.id !== 'flame' && activeWep.id !== 'plasma' && activeWep.id !== 'tesla') {
         const p = getAvailableParticle();
         if (p) {
-            p.spawn(allyX, allyY + 2, (Math.random()-0.5)*1.0, 1.2 + Math.random() * 1.2, '#ca8a04', 1.6, 1.5, 0.28, 'shell', 12, 3.0 + Math.random()*2.0);
+            const shellAngle = mercAngle - Math.PI/2 - (Math.random() * 0.4);
+            p.spawn(startX - Math.cos(mercAngle) * 8, startY - Math.sin(mercAngle) * 8, Math.cos(shellAngle) * 2.2, Math.sin(shellAngle) * 1.5, '#eab308', 1.8, 1.5, 0.28, 'shell', 12, 3.5 + Math.random()*2.0);
         }
     }
 }

@@ -5,6 +5,7 @@ import {
 import { INITIAL_GAME_STATE } from '../constants.js';
 import { formatNumber } from '../helpers.js';
 import { renderShop } from './Shop.js';
+import { playTabClick } from '../audio.js';
 
 export function togglePauseGame() {
     isPaused.value = !isPaused.value;
@@ -106,29 +107,56 @@ export function switchTab(tabId) {
     const tabMercs = document.getElementById('tab-mercs');
     const tabMutations = document.getElementById('tab-mutations');
 
-    if (tabWeapons) tabWeapons.classList.remove('btn-active-tab');
-    if (tabDefense) tabDefense.classList.remove('btn-active-tab');
-    if (tabMercs) tabMercs.classList.remove('btn-active-tab');
-    if (tabMutations) tabMutations.classList.remove('btn-active-tab');
+    [tabWeapons, tabDefense, tabMercs, tabMutations].forEach(el => {
+        if (el) {
+            el.classList.remove('btn-active-weapons', 'btn-active-defense', 'btn-active-mercs', 'btn-active-mutations', 'btn-active-tab');
+        }
+    });
     
     const activeTabEl = document.getElementById(`tab-${tabId}`);
-    if (activeTabEl) activeTabEl.classList.add('btn-active-tab');
+    if (activeTabEl) {
+        activeTabEl.classList.add(`btn-active-${tabId}`);
+    }
+    
+    try {
+        playTabClick();
+    } catch (e) {}
     
     renderShop(); 
 }
 
 export function updateActiveSkillCooldownUI(skill) {
-    const cdDiv = document.getElementById(`cooldown-${skill}`);
+    const cdCircle = document.getElementById(`cooldown-circle-${skill}`);
+    const cdText = document.getElementById(`cooldown-text-${skill}`);
     const timeVal = Math.ceil(skillsCooldown[skill]);
     
-    if (cdDiv) {
+    if (cdCircle || cdText) {
         if (timeVal > 0) {
-            cdDiv.classList.remove('hidden');
-            cdDiv.classList.add('flex');
-            cdDiv.innerText = `${timeVal}s`;
+            let maxCD = 15;
+            if (skill === 'airstrike') {
+                const dnaAirLvl = gameState.mutations.dnaAirstrikeCo ? gameState.mutations.dnaAirstrikeCo.level : 0;
+                maxCD = Math.max(4, 20 * (1 - (dnaAirLvl * 0.08)));
+            }
+            
+            const ratio = skillsCooldown[skill] / maxCD;
+            const offset = 88 * Math.max(0, Math.min(1, ratio));
+            
+            if (cdCircle) {
+                cdCircle.style.strokeDashoffset = offset;
+            }
+            
+            if (cdText) {
+                cdText.classList.remove('hidden');
+                cdText.innerText = `${timeVal}s`;
+            }
         } else {
-            cdDiv.classList.add('hidden');
-            cdDiv.classList.remove('flex');
+            if (cdCircle) {
+                cdCircle.style.strokeDashoffset = 0;
+            }
+            if (cdText) {
+                cdText.classList.add('hidden');
+                cdText.innerText = '';
+            }
         }
     }
 }

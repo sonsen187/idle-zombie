@@ -77,6 +77,7 @@ export function applySaveString(saveStr, notifyUser = true) {
                         localWep.clipSize = savedWep.clipSize ?? defaultWep.clipSize;
                         localWep.currentClip = savedWep.currentClip ?? (savedWep.unlocked ? defaultWep.clipSize : 0);
                         localWep.reloadTime = savedWep.reloadTime ?? defaultWep.reloadTime;
+                        localWep.shootInterval = defaultWep.shootInterval;
                     }
                 }
             });
@@ -116,7 +117,7 @@ export function applySaveString(saveStr, notifyUser = true) {
             systemHooks.showModal("Khôi Phục Tiến Trình", "Đã nạp file sao lưu của bạn thành công! Trở lại trận địa bảo vệ rào chắn.");
             if (systemHooks.dispatchDOMUpdates) systemHooks.dispatchDOMUpdates();
             if (systemHooks.renderShop) systemHooks.renderShop();
-            if (systemHooks.initBgCanvas && canvas) systemHooks.initBgCanvas(canvas.width, canvas.height);
+            if (systemHooks.initBgCanvas && canvas) systemHooks.initBgCanvas(canvas.clientWidth, canvas.clientHeight);
         }
     } catch (e) {
         if (notifyUser && systemHooks.showModal) {

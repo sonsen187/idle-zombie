@@ -77,7 +77,7 @@ export class Particle {
     update(dt) {
         if (!this.active) return;
         
-        if (this.type === 'shell' || this.type === 'coin') {
+        if (this.type === 'shell' || this.type === 'coin' || this.type === 'metal_shard') {
             this.vz -= this.gravity * dt * 60;
             this.z += this.vz * dt * 60;
             this.x += this.vx * dt * 60;
@@ -98,7 +98,7 @@ export class Particle {
                     this.spin = 0;
                 }
             }
-        } else if (this.type === 'corpse') {
+        } else if (this.type === 'corpse' || this.type === 'corpse_part') {
             this.x += this.vx * dt * 60;
             this.y += this.vy * dt * 60;
             
@@ -109,12 +109,18 @@ export class Particle {
             
             // Bleeding trail
             if (Math.random() < 0.15 * (dt * 60) && Math.abs(this.vx) > 0.5) {
+                const isCorpsePart = this.type === 'corpse_part';
+                const trailColor = isCorpsePart ? (this.color === '#15803d' || this.color === '#22c55e' ? '#14532d' : '#991b1b') : '#991b1b';
                 const bp = getAvailableParticle();
                 if (bp) {
-                    bp.spawn(this.x, this.y, (Math.random()-0.5)*0.5, (Math.random()-0.5)*0.5, '#991b1b', 2.0, 1.0, 0.08, 'fading');
+                    bp.spawn(this.x, this.y, (Math.random()-0.5)*0.5, (Math.random()-0.5)*0.5, trailColor, 2.0, 1.0, 0.08, 'fading');
                 }
-                if (Math.random() < 0.08 && hooks.addBloodSplatterToBg) {
-                    hooks.addBloodSplatterToBg(this.x, this.y, 1.8);
+                if (Math.random() < 0.08) {
+                    if (isCorpsePart && (this.color === '#15803d' || this.color === '#22c55e')) {
+                        if (hooks.addToxicSplatterToBg) hooks.addToxicSplatterToBg(this.x, this.y, 1.8);
+                    } else if (hooks.addBloodSplatterToBg) {
+                        hooks.addBloodSplatterToBg(this.x, this.y, 1.8);
+                    }
                 }
             }
         } else {
@@ -124,14 +130,20 @@ export class Particle {
             this.x += this.vx * dt * 60;
             this.y += this.vy * dt * 60;
             
-            // Blood splatter on floor
+            // Splatter on floor
             if (this.z <= 0) {
                 this.z = 0;
                 this.vz = 0;
                 this.vx = 0;
                 this.vy = 0;
-                if (Math.random() < 0.45 && hooks.addBloodSplatterToBg) {
-                    hooks.addBloodSplatterToBg(this.x, this.y, this.size * 1.5);
+                if (Math.random() < 0.45) {
+                    if (this.type === 'acid_drip' || this.type === 'toxic_gas') {
+                        if (hooks.addToxicSplatterToBg) {
+                            hooks.addToxicSplatterToBg(this.x, this.y, this.size * 1.5);
+                        }
+                    } else if (hooks.addBloodSplatterToBg) {
+                        hooks.addBloodSplatterToBg(this.x, this.y, this.size * 1.5);
+                    }
                 }
                 this.life = Math.min(this.life, 0.05); // Fade fast on ground
             }

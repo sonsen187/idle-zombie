@@ -57,7 +57,7 @@ export function executePrestige(dnaReward) {
     reloadTimer.value = 0;
 
     resetField();
-    if (systemHooks.initBgCanvas && canvas) systemHooks.initBgCanvas(canvas.width, canvas.height);
+    if (systemHooks.initBgCanvas && canvas) systemHooks.initBgCanvas(canvas.clientWidth, canvas.clientHeight);
     
     saveGameData(true);
     if (systemHooks.renderShop) systemHooks.renderShop();
@@ -83,7 +83,7 @@ export function checkWaveFinished() {
             playUpgradeChime();
             const ft = getAvailableText();
             if (ft) {
-                ft.spawn(canvas.width / 2, 60, `WAVE ${gameState.wave} BẮT ĐẦU!`, '#f59e0b', 18, true);
+                ft.spawn(canvas.clientWidth / 2, 60, `WAVE ${gameState.wave} BẮT ĐẦU!`, '#f59e0b', 18, true);
             }
             if (systemHooks.dispatchDOMUpdates) systemHooks.dispatchDOMUpdates();
             
@@ -101,8 +101,8 @@ export function checkWaveFinished() {
 
 // Main game logic tick update
 export function updateGame(dt) {
-    const logicalWidth = canvas.width;
-    const barricadeY = canvas.height - 160;
+    const logicalWidth = canvas.clientWidth;
+    const barricadeY = canvas.clientHeight - 160;
 
     domUpdateTimer.value += dt;
     if (domUpdateTimer.value >= DOM_UPDATE_INTERVAL) {
@@ -174,14 +174,14 @@ export function updateGame(dt) {
                     player.walkCycle = 0;
                 }
                 
-                const minPlayerX = canvas.width * 0.10;
-                const maxPlayerX = canvas.width * 0.90;
+                const minPlayerX = canvas.clientWidth * 0.10;
+                const maxPlayerX = canvas.clientWidth * 0.90;
                 player.x = Math.max(minPlayerX, Math.min(maxPlayerX, player.x));
                 
                 // Keep player at default Y position in auto mode
                 player.y = barricadeY + 30;
             } else {
-                player.targetX = canvas.width / 2;
+                player.targetX = canvas.clientWidth / 2;
                 const dx = player.targetX - player.x;
                 if (Math.abs(dx) > 2) {
                     player.x += dx * 0.05;
@@ -216,10 +216,10 @@ export function updateGame(dt) {
             }
 
             // Clamp player within defense zone
-            const minPlayerX = canvas.width * 0.10;
-            const maxPlayerX = canvas.width * 0.90;
+            const minPlayerX = canvas.clientWidth * 0.10;
+            const maxPlayerX = canvas.clientWidth * 0.90;
             const minPlayerY = barricadeY + 20;
-            const maxPlayerY = canvas.height - 20;
+            const maxPlayerY = canvas.clientHeight - 20;
 
             player.x = Math.max(minPlayerX, Math.min(maxPlayerX, player.x));
             player.y = Math.max(minPlayerY, Math.min(maxPlayerY, player.y));
@@ -237,22 +237,7 @@ export function updateGame(dt) {
         // Fire rate interval handling
         mainWeaponShootTimer.value += dt;
         const activeWep = gameState.weapons[gameState.activeWeaponIndex];
-        let shootSpeedInterval = 0.5;
-        
-        if (activeWep) {
-            switch(activeWep.id) {
-                case 'pistol': shootSpeedInterval = 0.42; break;
-                case 'smg': shootSpeedInterval = 0.08; break;
-                case 'shotgun': shootSpeedInterval = 1.15; break;
-                case 'rifle': shootSpeedInterval = 0.15; break;
-                case 'flame': shootSpeedInterval = 0.05; break;
-                case 'plasma': shootSpeedInterval = 0.85; break;
-                case 'freeze': shootSpeedInterval = 0.55; break;
-                case 'gatling': shootSpeedInterval = 0.04; break;
-                case 'tesla': shootSpeedInterval = 0.15; break;
-                case 'nuclear': shootSpeedInterval = 2.4; break;
-            }
-        }
+        const shootSpeedInterval = activeWep ? (activeWep.shootInterval || 0.5) : 0.5;
         
         const currentSpeed = activeSkillsDuration.overclock > 0 ? (shootSpeedInterval * 0.35) : shootSpeedInterval;
         
@@ -308,7 +293,7 @@ export function updateGame(dt) {
         saveGameData(true);
         const t = getAvailableText();
         if (t) {
-            t.spawn(canvas.width - 80, 25, "AUTOSAVE", "#10b981", 9, false);
+            t.spawn(canvas.clientWidth - 80, 25, "AUTOSAVE", "#10b981", 9, false);
         }
     }
 
@@ -424,7 +409,7 @@ export function updateGame(dt) {
             }
         });
         
-        if (plane.x > canvas.width + 150) {
+        if (plane.x > canvas.clientWidth + 150) {
             activeBomberPlanes.splice(i, 1);
         }
     }
@@ -534,6 +519,46 @@ export function updateGame(dt) {
                 const bulletAngle = Math.atan2(b.vy, b.vx);
                 if (z.damageTake(b.damage, b.isCrit, b.knockback, bulletAngle)) {
                     anyDead = true;
+                }
+                
+                // Spawn impact sparks
+                let sparkColor = '#facc15';
+                let sparkCount = b.isCrit ? 6 : 3;
+                if (b.isPlasma) {
+                    sparkColor = '#22d3ee';
+                    sparkCount = 6;
+                } else if (b.isTesla) {
+                    sparkColor = '#06b6d4';
+                    sparkCount = 4;
+                } else if (b.isFlame) {
+                    sparkColor = '#f97316';
+                    sparkCount = 2;
+                } else if (b.isFreeze) {
+                    sparkColor = '#38bdf8';
+                    sparkCount = 3;
+                } else if (b.isNuclear) {
+                    sparkColor = '#4ade80';
+                    sparkCount = 10;
+                }
+                
+                const oppAngle = bulletAngle + Math.PI;
+                for (let s = 0; s < sparkCount; s++) {
+                    const sp = getAvailableParticle();
+                    if (sp) {
+                        const a = oppAngle + (Math.random() - 0.5) * 0.8;
+                        const speed = Math.random() * 4 + 1.5;
+                        sp.spawn(
+                            b.x, 
+                            b.y, 
+                            Math.cos(a) * speed, 
+                            Math.sin(a) * speed, 
+                            sparkColor, 
+                            Math.random() * 2.0 + 1.0, 
+                            Math.random() * 0.22 + 0.12, 
+                            0.0, 
+                            'spark'
+                        );
+                    }
                 }
                 
                 if (b.isNuclear) {

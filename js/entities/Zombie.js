@@ -2,12 +2,12 @@ import { project3D } from '../helpers.js';
 import { playCritChime } from '../audio.js';
 import { getAvailableParticle, spawnExplosion, spawnBloodSpurt } from './Particle.js';
 import { getAvailableText } from './FloatingText.js';
-import { pixi, gameState, zombies, canvas, shakeTime } from '../state.js';
+import { pixi, gameState, zombies, canvas, shakeTime, bulletPool } from '../state.js';
 import { hooks } from './hooks.js';
 
 export class Zombie {
     constructor(wave, isBoss = false, groupOffset = 0) {
-        const logicalWidth = canvas.width;
+        const logicalWidth = canvas.clientWidth;
 
         this.id = 'z_' + Math.random().toString(36).substr(2, 9);
         this.isBoss = isBoss;
@@ -35,6 +35,15 @@ export class Zombie {
         this.burnTimer = 0;
         this.burnDamage = 0;
         this.burnTickTimer = 0;
+        
+        this.isEnraged = false;
+        this.dodgeTimer = 0;
+        this.dodgeDuration = 0;
+        this.dodgeDirection = 0;
+        this.hasLeaped = false;
+        this.summonProgress = 0;
+        this.armorBroken = false;
+        this.damageResistance = 1.0;
         
         if (this.type === 'runner') {
             hpMultiplier = 0.6;
@@ -71,21 +80,23 @@ export class Zombie {
             const bossTypes = ['Butcher', 'Titan Armored', 'Overlord'];
             this.bossType = bossTypes[Math.floor(Math.random() * bossTypes.length)];
             
+            this.damageResistance = 0.70; // Takes 30% less damage
+            
             if (this.bossType === 'Titan Armored') {
-                hpMultiplier = 16.0;
-                speedMultiplier = 0.22;
+                hpMultiplier = 38.0;
+                speedMultiplier = 0.45;
                 dmgMultiplier = 2.6;
                 goldMultiplier = 3.5;
                 this.name = "Boss Titan Thiết Giáp";
             } else if (this.bossType === 'Butcher') {
-                hpMultiplier = 9.0;
-                speedMultiplier = 0.42;
+                hpMultiplier = 24.0;
+                speedMultiplier = 0.75;
                 dmgMultiplier = 2.0;
                 goldMultiplier = 2.4;
                 this.name = "Boss Đồ Tể Cuồng Loạn";
             } else {
-                hpMultiplier = 7.0;
-                speedMultiplier = 0.58;
+                hpMultiplier = 20.0;
+                speedMultiplier = 0.85;
                 dmgMultiplier = 1.5;
                 goldMultiplier = 2.6;
                 this.name = "Boss Chúa Tể Ám Ảnh";
@@ -157,7 +168,7 @@ export class Zombie {
             this.impulseX *= Math.pow(0.82, dt * 60);
             this.impulseY *= Math.pow(0.82, dt * 60);
             
-            const logicalWidth = canvas.width;
+            const logicalWidth = canvas.clientWidth;
             const minX = logicalWidth * 0.15;
             const maxX = logicalWidth * 0.85;
             if (this.x < minX) {
@@ -235,12 +246,112 @@ export class Zombie {
             return; 
         }
 
-        this.walkCycle += dt * 5.5 * this.speed;
+        // Dodging logic (Runner, Golden, Butcher)
+        if (this.dodgeTimer > 0) {
+            this.dodgeTimer -= dt;
+        }
+        if (this.dodgeDuration > 0) {
+            this.dodgeDuration -= dt;
+            this.x += this.dodgeDirection * this.speed * 4.8 * dt * 60;
+            
+            if (Math.random() < 0.35 * (dt * 60)) {
+                const p = getAvailableParticle();
+                if (p) p.spawn(this.x, this.y, -this.dodgeDirection * 1.5, (Math.random() - 0.5) * 1.0, '#d1d5db', 1.5, 0.3);
+            }
+            
+            const logicalWidth = canvas.clientWidth;
+            const minX = logicalWidth * 0.15;
+            const maxX = logicalWidth * 0.85;
+            if (this.x < minX) this.x = minX;
+            if (this.x > maxX) this.x = maxX;
+        } else if (!this.isFrozen && this.dodgeTimer <= 0) {
+            if (this.type === 'runner' || this.type === 'golden' || (this.isBoss && this.bossType === 'Butcher')) {
+                const scanDistSqr = 7200; // ~85px
+                for (let i = 0; i < bulletPool.length; i++) {
+                    const b = bulletPool[i];
+                    if (b && b.active && !b.isFlame && !b.isTesla) {
+                        const dx = b.x - this.x;
+                        const dy = b.y - this.y;
+                        if (dy < 0 && b.vy > 0) { // bullet is above us and moving down
+                            const distSqr = dx * dx + dy * dy;
+                            if (distSqr < scanDistSqr) {
+                                if (Math.random() < 0.40) { // 40% chance
+                                    this.dodgeDirection = Math.random() < 0.5 ? -1 : 1;
+                                    this.dodgeDuration = 0.22;
+                                    this.dodgeTimer = (this.isBoss && this.bossType === 'Butcher') ? 0.8 : 1.6;
+                                    
+                                    for (let s = 0; s < 4; s++) {
+                                        const p = getAvailableParticle();
+                                        if (p) p.spawn(this.x, this.y, this.dodgeDirection * (Math.random() * 3.5 + 2), (Math.random() - 0.5) * 1.2, '#78716c', 1.8, 0.45);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-        if (this.type === 'necromancer' && this.y < barricadeY - 110) {
-            this.summonTimer -= dt;
-            if (this.summonTimer <= 0) {
-                this.summonTimer = 4.5;
+        // Runner leaping logic
+        if (this.type === 'runner' && !this.isFrozen && !this.hasLeaped) {
+            const leapStopY = barricadeY - 150;
+            if (this.y >= leapStopY - 60 && this.y <= leapStopY) {
+                this.hasLeaped = true;
+                this.vz = 4.8;
+                for (let s = 0; s < 4; s++) {
+                    const p = getAvailableParticle();
+                    if (p) p.spawn(this.x, this.y, (Math.random() - 0.5) * 2.5, (Math.random() - 0.5) * 2.0, '#a1a1aa', 2.0, 0.5);
+                }
+            }
+        }
+        
+        if (this.z > 0 && this.type === 'runner') {
+            this.y += this.speed * 2.5 * dt * 60;
+        }
+
+        // Toxic trail dripping
+        if (this.type === 'toxic' && !this.isFrozen) {
+            if (Math.random() < 0.12 * (dt * 60)) {
+                const p = getAvailableParticle();
+                if (p) {
+                    p.spawn(
+                        this.x + (Math.random() - 0.5) * this.radius,
+                        this.y,
+                        (Math.random() - 0.5) * 0.8,
+                        -Math.random() * 0.6,
+                        '#22c55e',
+                        2.2,
+                        1.2,
+                        0.08,
+                        'acid_drip'
+                    );
+                }
+            }
+        }
+
+        // Necromancer Ritual progress
+        if (this.summonProgress > 0) {
+            this.summonProgress -= dt;
+            
+            if (Math.random() < 0.28 * (dt * 60)) {
+                const p = getAvailableParticle();
+                if (p) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const sp = Math.random() * 2.5 + 1.0;
+                    p.spawn(
+                        this.x + Math.cos(angle) * (this.radius * 1.5), 
+                        this.y + Math.sin(angle) * (this.radius * 0.6), 
+                        -Math.cos(angle) * sp * 0.4, 
+                        -Math.abs(Math.sin(angle)) * sp * 0.6, 
+                        '#a855f7', 
+                        2.0, 
+                        0.6
+                    );
+                }
+            }
+            
+            if (this.summonProgress <= 0) {
                 const minionCount = Math.random() < 0.45 ? 2 : 1;
                 for (let c = 0; c < minionCount; c++) {
                     const mType = Math.random() < 0.65 ? 'normal' : 'runner';
@@ -259,9 +370,22 @@ export class Zombie {
             }
         }
 
+        this.walkCycle += dt * 5.5 * this.speed;
+
+        if (this.type === 'necromancer' && this.y < barricadeY - 110 && this.summonProgress <= 0) {
+            this.summonTimer -= dt;
+            if (this.summonTimer <= 0) {
+                this.summonTimer = 6.0;
+                this.summonProgress = 1.5;
+            }
+        }
+
         let currentSpeed = this.speed;
         if (this.isFrozen) {
             currentSpeed *= 0.35;
+        }
+        if (this.summonProgress > 0) {
+            currentSpeed = 0;
         }
 
         const stopY = barricadeY - 32;
@@ -275,11 +399,17 @@ export class Zombie {
                 this.attackTimer += dt;
                 if (this.attackTimer >= this.attackCooldown) {
                     this.attackTimer = 0;
+                    
+                    let finalDmg = this.damage;
+                    if (this.type === 'toxic') {
+                        finalDmg = Math.round(finalDmg * 1.25);
+                    }
+                    
                     if (hooks.attackBarricade) {
-                        hooks.attackBarricade(this.damage);
+                        hooks.attackBarricade(finalDmg);
                     }
                     shakeTime.value = 0.2;
-                    spawnExplosion(this.x, this.y + 10 + this.radius, '#ffffff', 4);
+                    spawnExplosion(this.x, this.y + 10 + this.radius, this.type === 'toxic' ? '#22c55e' : '#ffffff', 4);
                 }
             } else {
                 this.attackTimer = 0;
@@ -292,17 +422,91 @@ export class Zombie {
     }
 
     damageTake(amount, isCrit, knockbackForce = 0, knockbackAngle = 0) {
+        amount = Math.max(1, Math.round(amount * (this.damageResistance || 1.0)));
+
+        if (this.type === 'necromancer' && this.summonProgress > 0) {
+            amount = Math.max(1, Math.round(amount * 0.5));
+        }
+
         this.hp -= amount;
         this.flinchTimer = 0.08; 
         
+        if ((this.type === 'armored' || (this.isBoss && this.bossType === 'Titan Armored')) && !this.armorBroken) {
+            if (this.hp < this.maxHp * 0.5) {
+                this.armorBroken = true;
+                
+                if (this.isBoss && this.bossType === 'Titan Armored') {
+                    this.speed *= 1.8;
+                    for (let s = 0; s < 12; s++) {
+                        const rp = getAvailableParticle();
+                        if (rp) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const speed = Math.random() * 4 + 2;
+                            rp.spawn(this.x, this.y - this.radius, Math.cos(angle)*speed, Math.sin(angle)*speed, '#ef4444', 3.0, 0.80);
+                        }
+                    }
+                }
+                
+                for (let m = 0; m < 6; m++) {
+                    const mp = getAvailableParticle();
+                    if (mp) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = Math.random() * 4 + 2;
+                        mp.spawn(
+                            this.x, 
+                            this.y - this.radius, 
+                            Math.cos(angle) * speed, 
+                            Math.sin(angle) * speed, 
+                            '#a1a1aa', 
+                            2.2, 
+                            1.4, 
+                            0.20, 
+                            'metal_shard',
+                            this.z + 8 + Math.random() * 6,
+                            3.0 + Math.random() * 2.5
+                        );
+                    }
+                }
+            }
+        }
+
+        if (this.hp > 0 && this.hp < this.maxHp * 0.45 && !this.isEnraged) {
+            this.isEnraged = true;
+            if (this.isBoss) {
+                this.speed *= 1.6;
+            } else {
+                this.speed *= 1.35;
+            }
+            this.attackCooldown *= 0.75;
+            
+            for (let r = 0; r < 5; r++) {
+                const rp = getAvailableParticle();
+                if (rp) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 2.5 + 1.2;
+                    rp.spawn(this.x, this.y - this.radius, Math.cos(angle) * speed, Math.sin(angle) * speed, '#ef4444', 2.0, 0.65);
+                }
+            }
+        }
+        
         if (knockbackForce > 0) {
             let mass = 1.0;
-            if (this.isBoss) mass = 5.0;
-            else if (this.type === 'armored') mass = 2.5;
-            else if (this.type === 'toxic') mass = 1.4;
-            else if (this.type === 'runner') mass = 0.7;
+            if (this.isBoss) {
+                mass = 25.0;
+            } else if (this.type === 'armored') {
+                mass = 2.5;
+            } else if (this.type === 'toxic') {
+                mass = 1.4;
+            } else if (this.type === 'runner') {
+                mass = 0.7;
+            }
             
-            const push = knockbackForce / mass;
+            let push = knockbackForce / mass;
+            if (this.isBoss && this.isEnraged) {
+                push = 0;
+                knockbackForce = 0;
+            }
+            
             this.impulseX = Math.cos(knockbackAngle) * push * 1.5;
             this.impulseY = Math.sin(knockbackAngle) * push * 1.5;
             
@@ -347,7 +551,12 @@ export class Zombie {
             if (hooks.addBloodSplatterToBg) {
                 hooks.addBloodSplatterToBg(this.x, this.y, this.isBoss ? 16 : 8);
             }
-            spawnExplosion(this.x, this.y, this.type === 'golden' ? '#eab308' : '#7f1d1d', 14);
+            
+            if (this.type === 'toxic' && hooks.addToxicSplatterToBg) {
+                hooks.addToxicSplatterToBg(this.x, this.y, 14);
+            }
+            
+            spawnExplosion(this.x, this.y, this.type === 'golden' ? '#eab308' : (this.type === 'toxic' ? '#22c55e' : '#7f1d1d'), 14);
 
             const coinsToSpawn = Math.min(6, Math.max(2, Math.floor(this.goldReward / 5) || 2));
             for (let c = 0; c < coinsToSpawn; c++) {
@@ -359,19 +568,46 @@ export class Zombie {
                 }
             }
 
-            const cp = getAvailableParticle();
-            if (cp) {
-                const pushStrength = Math.max(2.5, Math.min(15, knockbackForce * 1.5));
-                const pushX = Math.cos(knockbackAngle) * pushStrength;
-                const pushY = Math.sin(knockbackAngle) * pushStrength;
+            const dismember = isCrit || knockbackForce > 6.0 || this.type === 'toxic' || this.isBoss;
+            if (dismember) {
+                const partTypes = ['head', 'torso', 'limb', 'limb'];
+                let baseColorStr = '#16a34a';
+                if (this.type === 'runner') baseColorStr = '#ea580c';
+                else if (this.type === 'armored') baseColorStr = '#475569';
+                else if (this.type === 'toxic') baseColorStr = '#22c55e';
+                else if (this.type === 'necromancer') baseColorStr = '#a855f7';
+                else if (this.type === 'golden') baseColorStr = '#facc15';
+                else if (this.isBoss) {
+                    if (this.bossType === 'Titan Armored') baseColorStr = '#71717a';
+                    else if (this.bossType === 'Butcher') baseColorStr = '#ef4444';
+                    else baseColorStr = '#d8b4fe';
+                }
                 
-                let outfitColor = '#1e3a8a';
-                if (this.type === 'runner') outfitColor = '#b45309';
-                else if (this.type === 'armored') outfitColor = '#3f3f46';
-                else if (this.type === 'toxic') outfitColor = '#15803d';
-                else if (this.type === 'golden') outfitColor = '#eab308';
-                
-                cp.spawn(this.x, this.y, pushX, pushY, outfitColor, this.radius, 2.5, 0, 'corpse');
+                partTypes.forEach(partName => {
+                    const cpp = getAvailableParticle();
+                    if (cpp) {
+                        const angle = knockbackAngle + (Math.random() - 0.5) * 1.2;
+                        const pushStrength = Math.max(3.0, Math.min(18, knockbackForce * (0.8 + Math.random() * 0.8)));
+                        const pushX = Math.cos(angle) * pushStrength;
+                        const pushY = Math.sin(angle) * pushStrength;
+                        cpp.spawn(this.x, this.y, pushX, pushY, `${baseColorStr}:${partName}`, this.radius * 0.65, 2.0, 0, 'corpse_part');
+                    }
+                });
+            } else {
+                const cp = getAvailableParticle();
+                if (cp) {
+                    const pushStrength = Math.max(2.5, Math.min(15, knockbackForce * 1.5));
+                    const pushX = Math.cos(knockbackAngle) * pushStrength;
+                    const pushY = Math.sin(knockbackAngle) * pushStrength;
+                    
+                    let outfitColor = '#1e3a8a';
+                    if (this.type === 'runner') outfitColor = '#b45309';
+                    else if (this.type === 'armored') outfitColor = '#3f3f46';
+                    else if (this.type === 'toxic') outfitColor = '#15803d';
+                    else if (this.type === 'golden') outfitColor = '#eab308';
+                    
+                    cp.spawn(this.x, this.y, pushX, pushY, outfitColor, this.radius, 2.5, 0, 'corpse');
+                }
             }
 
             if (hooks.checkWaveFinished) hooks.checkWaveFinished();
@@ -394,9 +630,18 @@ export class Zombie {
         this.graphics.scale.set(pt.scale * 1.35); // 35% larger zombie sprites
         
         g.position.set(0, 0);
-        g.rotation = 0;
         
         const isHit = this.flinchTimer > 0;
+        
+        // Body sway (rotation)
+        let bodyRot = 0;
+        if (!isHit) {
+            bodyRot = Math.sin(this.walkCycle) * 0.05;
+        } else {
+            bodyRot = (Math.random() - 0.5) * 0.15;
+        }
+        g.rotation = bodyRot;
+        
         const sway = Math.sin(this.walkCycle);
         const legSwayL = sway * (this.type === 'runner' ? 3.5 : 2.5);
         const legSwayR = -sway * (this.type === 'runner' ? 3.5 : 2.5);
@@ -412,6 +657,13 @@ export class Zombie {
         
         // 2. Specialty glows/auras around the torso
         if (!isHit) {
+            if (this.isEnraged) {
+                // Neon Red Enrage glow
+                g.beginFill(0xef4444, 0.18 + Math.sin(Date.now() * 0.012) * 0.06);
+                g.drawCircle(0, -this.radius * 0.45, this.radius * 1.5);
+                g.endFill();
+            }
+            
             if (this.type === 'toxic') {
                 const bubbleOffset1 = Math.sin(Date.now() * 0.008) * 4;
                 const bubbleOffset2 = Math.cos(Date.now() * 0.006) * 3;
@@ -424,8 +676,22 @@ export class Zombie {
                 g.drawCircle(this.radius * 0.35 + bubbleOffset2, -this.radius * 0.6 + bubbleOffset1, 1.8);
                 g.endFill();
             } else if (this.type === 'necromancer') {
-                g.lineStyle(1.8, 0xa855f7, 0.45 + Math.sin(Date.now() * 0.01) * 0.18);
-                g.drawCircle(0, -this.radius * 0.45, this.radius * 1.55);
+                if (this.summonProgress > 0) {
+                    // Glowing magical circle under feet
+                    const pulseRad = this.radius * (1.6 + Math.sin(Date.now() * 0.02) * 0.15);
+                    g.lineStyle(2.2, 0xa855f7, 0.65 + Math.sin(Date.now() * 0.015) * 0.15);
+                    g.drawEllipse(0, this.radius * 0.95, pulseRad, pulseRad * 0.4);
+                    g.endFill();
+                    
+                    // Magical shield bubble
+                    g.lineStyle(1.8, 0xd8b4fe, 0.6);
+                    g.beginFill(0xa855f7, 0.16);
+                    g.drawCircle(0, -this.radius * 0.45, this.radius * 1.45);
+                    g.endFill();
+                } else {
+                    g.lineStyle(1.8, 0xa855f7, 0.45 + Math.sin(Date.now() * 0.01) * 0.18);
+                    g.drawCircle(0, -this.radius * 0.45, this.radius * 1.55);
+                }
             } else if (this.type === 'golden') {
                 g.lineStyle(2.0, 0xfacc15, 0.5 + Math.sin(Date.now() * 0.015) * 0.22);
                 g.drawCircle(0, -this.radius * 0.45, this.radius * 1.45);
@@ -470,18 +736,35 @@ export class Zombie {
         g.drawEllipse(0, -this.radius * 0.45, this.radius * 0.85, this.radius * 0.55);
         g.endFill();
         
-        g.lineStyle(1.5, isHit ? 0xffffff : 0x052e16, 0.4);
-        g.moveTo(-this.radius * 0.75, -this.radius * 0.5);
-        g.lineTo(0, -this.radius * 0.4);
-        g.lineTo(this.radius * 0.75, -this.radius * 0.5);
+        if (!isHit && this.type !== 'golden') {
+            g.beginFill(0xb91c1c);
+            g.drawEllipse(this.radius * 0.05, -this.radius * 0.45, this.radius * 0.4, this.radius * 0.25);
+            g.endFill();
+            
+            g.lineStyle(this.radius * 0.08, 0xf1f5f9, 0.95);
+            g.moveTo(-this.radius * 0.18, -this.radius * 0.5);
+            g.lineTo(this.radius * 0.22, -this.radius * 0.54);
+            g.moveTo(-this.radius * 0.20, -this.radius * 0.42);
+            g.lineTo(this.radius * 0.18, -this.radius * 0.45);
+            g.moveTo(-this.radius * 0.16, -this.radius * 0.34);
+            g.lineTo(this.radius * 0.14, -this.radius * 0.37);
+            g.lineStyle(0);
+        }
         
-        // 5. Ragged clothes overlay
+        // 5. Ragged clothes overlay with blood stains
         if (!isHit && this.type !== 'golden') {
             const shirtColor = this.type === 'runner' ? 0x7c2d12 : (this.type === 'toxic' ? 0x14532d : 0x1e3a8a);
             g.lineStyle(0);
             g.beginFill(shirtColor);
             g.drawEllipse(0, -this.radius * 0.5, this.radius * 0.75, this.radius * 0.45);
             g.endFill();
+            
+            g.beginFill(0x7f1d1d);
+            g.drawCircle(-this.radius * 0.4, -this.radius * 0.5, this.radius * 0.18);
+            g.drawCircle(this.radius * 0.35, -this.radius * 0.4, this.radius * 0.15);
+            g.beginFill(0xef4444);
+            g.drawCircle(-this.radius * 0.45, -this.radius * 0.45, this.radius * 0.1);
+            g.drawCircle(this.radius * 0.38, -this.radius * 0.38, this.radius * 0.08);
             
             g.beginFill(fillColor);
             g.drawCircle(-this.radius * 0.25, -this.radius * 0.55, this.radius * 0.15);
@@ -492,15 +775,17 @@ export class Zombie {
         // Boss spikes / Armored plates
         if (!isHit) {
             if (this.type === 'armored' || (this.isBoss && this.bossType === 'Titan Armored')) {
-                g.lineStyle(0);
-                g.beginFill(0x64748b);
-                g.drawRect(-this.radius * 0.6, -this.radius * 0.75, this.radius * 1.2, this.radius * 0.3);
-                g.endFill();
-                
-                g.beginFill(0x94a3b8);
-                g.drawCircle(-this.radius * 0.4, -this.radius * 0.65, 1.2);
-                g.drawCircle(this.radius * 0.4, -this.radius * 0.65, 1.2);
-                g.endFill();
+                if (!this.armorBroken) {
+                    g.lineStyle(0);
+                    g.beginFill(0x64748b);
+                    g.drawRect(-this.radius * 0.6, -this.radius * 0.75, this.radius * 1.2, this.radius * 0.3);
+                    g.endFill();
+                    
+                    g.beginFill(0x94a3b8);
+                    g.drawCircle(-this.radius * 0.4, -this.radius * 0.65, 1.2);
+                    g.drawCircle(this.radius * 0.4, -this.radius * 0.65, 1.2);
+                    g.endFill();
+                }
             } else if (this.isBoss) {
                 g.lineStyle(0);
                 g.beginFill(0x374151);
@@ -516,15 +801,54 @@ export class Zombie {
                 ]);
                 g.endFill();
             }
+            
+            if (this.type === 'toxic') {
+                // Pulsing acid pustules on back
+                const pPulse1 = 2.0 + Math.sin(Date.now() * 0.008) * 0.6;
+                const pPulse2 = 1.6 + Math.cos(Date.now() * 0.006) * 0.5;
+                g.lineStyle(0.8, 0x14532d);
+                g.beginFill(0xa3e635); // neon yellow-green
+                g.drawCircle(-this.radius * 0.35, -this.radius * 0.7, pPulse1);
+                g.beginFill(0x22c55e); // neon green
+                g.drawCircle(this.radius * 0.3, -this.radius * 0.6, pPulse2);
+                g.endFill();
+            }
         }
         
         // 6. Jointed arms reaching forward/downward
         let armColor = fillColor;
+        const isAttacking = this.attackTimer > 0;
         
-        const leftElbowX = -this.radius * 0.78 + Math.sin(this.walkCycle) * 2.0;
-        const leftElbowY = -this.radius * 0.35 + Math.cos(this.walkCycle) * 2.0;
-        const leftHandX = -this.radius * 0.65 + Math.sin(this.walkCycle) * 3.0;
-        const leftHandY = -this.radius * 0.05 + Math.cos(this.walkCycle) * 3.0;
+        let leftElbowX, leftElbowY, leftHandX, leftHandY;
+        let rightElbowX, rightElbowY, rightHandX, rightHandY;
+        
+        if (isAttacking) {
+            // High-intensity claw slashing animation
+            const slashPhase = (this.attackTimer / this.attackCooldown) * Math.PI * 2.0;
+            const slashAmt1 = Math.sin(slashPhase) * (this.radius * 0.35);
+            const slashAmt2 = Math.sin(slashPhase + Math.PI) * (this.radius * 0.35);
+            
+            leftElbowX = -this.radius * 0.65;
+            leftElbowY = -this.radius * 0.85 + slashAmt1;
+            leftHandX = -this.radius * 0.5;
+            leftHandY = -this.radius * 1.1 + slashAmt1 * 1.4;
+            
+            rightElbowX = this.radius * 0.65;
+            rightElbowY = -this.radius * 0.85 + slashAmt2;
+            rightHandX = this.radius * 0.5;
+            rightHandY = -this.radius * 1.1 + slashAmt2 * 1.4;
+        } else {
+            // Creepy asymmetrical arms: limp broken left arm, aggressive reaching right arm
+            leftElbowX = -this.radius * 0.65 + Math.sin(this.walkCycle * 0.5) * 1.0;
+            leftElbowY = -this.radius * 0.15 + Math.cos(this.walkCycle * 0.5) * 1.0;
+            leftHandX = -this.radius * 0.5 + Math.sin(this.walkCycle * 0.5) * 1.5;
+            leftHandY = this.radius * 0.25 + Math.cos(this.walkCycle * 0.5) * 1.5;
+            
+            rightElbowX = this.radius * 0.78 + Math.sin(this.walkCycle) * 1.8;
+            rightElbowY = -this.radius * 0.55 + Math.cos(this.walkCycle) * 1.8;
+            rightHandX = this.radius * 0.95 + Math.sin(this.walkCycle) * 2.5;
+            rightHandY = -this.radius * 0.45 + Math.cos(this.walkCycle) * 2.5;
+        }
         
         g.lineStyle(this.isBoss ? 4.8 : (this.type === 'armored' ? 3.6 : 2.8), isHit ? 0xffffff : armColor * 0.82);
         g.moveTo(-this.radius * 0.7, -this.radius * 0.65);
@@ -539,11 +863,6 @@ export class Zombie {
         g.drawCircle(leftHandX, leftHandY + 2.5, 1.0);
         g.drawCircle(leftHandX + 1.5, leftHandY + 1.5, 1.0);
         g.endFill();
-        
-        const rightElbowX = this.radius * 0.78 - Math.sin(this.walkCycle) * 2.0;
-        const rightElbowY = -this.radius * 0.35 - Math.cos(this.walkCycle) * 2.0;
-        const rightHandX = this.radius * 0.65 - Math.sin(this.walkCycle) * 3.0;
-        const rightHandY = -this.radius * 0.05 - Math.cos(this.walkCycle) * 3.0;
         
         g.lineStyle(this.isBoss ? 5.5 : (this.type === 'armored' ? 4.5 : 3.2), isHit ? 0xffffff : armColor);
         g.moveTo(this.radius * 0.7, -this.radius * 0.65);
@@ -576,7 +895,12 @@ export class Zombie {
         }
         
         // 7. Head (at the top: Y negative ~ -1.2 * radius)
-        const headCenterY = -this.radius * 1.2;
+        let headCenterY = -this.radius * 1.2;
+        if (!isHit) {
+            headCenterY += Math.sin(this.walkCycle * 2.0) * 1.2; // Head bobbing
+        } else {
+            headCenterY += 1.5; // Damage flinch drop
+        }
         
         // Ears
         g.lineStyle(0);
@@ -591,13 +915,28 @@ export class Zombie {
         
         // Teeth
         if (!isHit && this.type !== 'golden') {
+            // Dark gaping jaw
             g.beginFill(0x1a0505);
-            g.drawEllipse(0, headCenterY + this.radius * 0.22, this.radius * 0.28, this.radius * 0.12);
+            g.drawPolygon([
+                -this.radius * 0.25, headCenterY + this.radius * 0.15,
+                this.radius * 0.28, headCenterY + this.radius * 0.18,
+                this.radius * 0.20, headCenterY + this.radius * 0.38,
+                -this.radius * 0.15, headCenterY + this.radius * 0.35
+            ]);
             g.endFill();
             
-            g.beginFill(0xfbfbfb);
-            g.drawPolygon([-this.radius * 0.12, headCenterY + this.radius * 0.18, -this.radius * 0.08, headCenterY + this.radius * 0.25, -this.radius * 0.04, headCenterY + this.radius * 0.18]);
-            g.drawPolygon([this.radius * 0.04, headCenterY + this.radius * 0.18, this.radius * 0.08, headCenterY + this.radius * 0.25, this.radius * 0.12, headCenterY + this.radius * 0.18]);
+            // Sharp crooked white teeth
+            g.beginFill(0xf1f5f9);
+            g.drawPolygon([-this.radius * 0.15, headCenterY + this.radius * 0.16, -this.radius * 0.10, headCenterY + this.radius * 0.24, -this.radius * 0.05, headCenterY + this.radius * 0.16]);
+            g.drawPolygon([this.radius * 0.02, headCenterY + this.radius * 0.16, this.radius * 0.08, headCenterY + this.radius * 0.24, this.radius * 0.14, headCenterY + this.radius * 0.16]);
+            g.drawPolygon([-this.radius * 0.10, headCenterY + this.radius * 0.33, -this.radius * 0.06, headCenterY + this.radius * 0.26, -this.radius * 0.02, headCenterY + this.radius * 0.33]);
+            g.drawPolygon([this.radius * 0.05, headCenterY + this.radius * 0.34, this.radius * 0.09, headCenterY + this.radius * 0.27, this.radius * 0.13, headCenterY + this.radius * 0.34]);
+            g.endFill();
+            
+            // Bleeding mouth drip
+            g.beginFill(0xb91c1c);
+            g.drawCircle(this.radius * 0.12, headCenterY + this.radius * 0.36, 1.2);
+            g.drawCircle(-this.radius * 0.06, headCenterY + this.radius * 0.33, 0.8);
             g.endFill();
         }
         
@@ -614,37 +953,72 @@ export class Zombie {
             g.endFill();
         }
         
-        // 8. Glowing eyes
+        // 8. Glowing eyes (One normal, one hollow bleeding eye socket!)
         let eyeColor = 0xf87171;
         if (this.type === 'toxic') eyeColor = 0xa3e635;
         else if (this.type === 'necromancer') eyeColor = 0xf0abfc;
         else if (this.type === 'golden') eyeColor = 0xffffff;
         else if (this.isBoss) eyeColor = 0xf43f5e;
         
+        const eyeScale = (this.isEnraged && !isHit) ? 1.6 : 1.0;
+        
+        // Right eye: Normal glowing eye
         g.beginFill(eyeColor);
-        g.drawCircle(-this.radius * 0.18, headCenterY + this.radius * 0.02, this.isBoss ? 3.0 : 1.6);
-        g.drawCircle(this.radius * 0.18, headCenterY + this.radius * 0.02, this.isBoss ? 3.0 : 1.6);
+        g.drawCircle(this.radius * 0.18, headCenterY + this.radius * 0.02, (this.isBoss ? 3.0 : 1.6) * eyeScale);
         g.endFill();
         
         if (!isHit && this.type !== 'golden') {
             g.beginFill(0x450505);
-            g.drawCircle(-this.radius * 0.18, headCenterY + this.radius * 0.02, this.isBoss ? 1.2 : 0.6);
-            g.drawCircle(this.radius * 0.18, headCenterY + this.radius * 0.02, this.isBoss ? 1.2 : 0.6);
+            g.drawCircle(this.radius * 0.18, headCenterY + this.radius * 0.02, (this.isBoss ? 1.2 : 0.6) * eyeScale);
+            g.endFill();
+        }
+        
+        // Left eye: Hollowed-out dark bleeding eye socket!
+        if (!isHit && this.type !== 'golden') {
+            g.beginFill(0x0a0505);
+            g.drawCircle(-this.radius * 0.18, headCenterY + this.radius * 0.02, (this.isBoss ? 2.5 : 1.4));
+            g.endFill();
+            
+            g.lineStyle(1.0, 0x991b1b, 0.95);
+            g.moveTo(-this.radius * 0.18, headCenterY + this.radius * 0.02);
+            g.lineTo(-this.radius * 0.16, headCenterY + this.radius * 0.22);
+            g.lineStyle(0);
+        } else {
+            g.beginFill(eyeColor);
+            g.drawCircle(-this.radius * 0.18, headCenterY + this.radius * 0.02, (this.isBoss ? 3.0 : 1.6) * eyeScale);
             g.endFill();
         }
         
         // Frozen overlays
         if (this.isFrozen) {
-            g.beginFill(0x38bdf8, 0.4);
-            g.lineStyle(1.8, 0x06b6d4);
-            g.drawCircle(0, -this.radius * 0.4, this.radius * 1.25);
+            g.beginFill(0x06b6d4, 0.25);
+            g.lineStyle(1.6, 0x38bdf8, 0.8);
+            g.drawCircle(0, -this.radius * 0.4, this.radius * 1.2);
+            g.endFill();
+            
+            // Draw 3 sharp ice spikes
+            g.beginFill(0x38bdf8, 0.75);
+            g.lineStyle(0.6, 0xe0f2fe);
+            g.drawPolygon([
+                -this.radius * 1.0, -this.radius * 0.7,
+                -this.radius * 1.3, -this.radius * 0.4,
+                -this.radius * 0.8, -this.radius * 0.2
+            ]);
+            g.drawPolygon([
+                this.radius * 1.0, -this.radius * 0.5,
+                this.radius * 1.3, -this.radius * 0.2,
+                this.radius * 0.8, -this.radius * 0.0
+            ]);
+            g.drawPolygon([
+                -this.radius * 0.25, -this.radius * 1.4,
+                0, -this.radius * 1.7,
+                this.radius * 0.25, -this.radius * 1.4
+            ]);
             g.endFill();
             
             g.lineStyle(0.8, 0xffffff, 0.6);
             g.moveTo(-this.radius * 0.8, -this.radius * 0.95);
             g.lineTo(this.radius * 0.8, this.radius * 0.15);
-            g.moveTo(this.radius * 0.5, -this.radius * 0.75);
-            g.lineTo(-this.radius * 0.5, this.radius * 0.15);
         }
         
         // Burning overlays
@@ -697,13 +1071,22 @@ export class Zombie {
     }
 }
 
-// Find closest zombie to target
-export function getPrioritizedZombie() {
+// Find closest zombie to target, considering safe spawn zone and weapon range limits
+export function getPrioritizedZombie(shooterX = null, shooterY = null, maxRange = Infinity) {
     let bestTarget = null;
     let maxY = -Infinity;
     for (let i = 0; i < zombies.length; i++) {
         const z = zombies[i];
         if (z && z.active && z.hp > 0) {
+            if (z.y < 70) continue;
+            
+            if (shooterX !== null && shooterY !== null && maxRange !== Infinity) {
+                const dx = z.x - shooterX;
+                const dy = z.y - shooterY;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist > maxRange) continue;
+            }
+            
             if (z.y > maxY) {
                 maxY = z.y;
                 bestTarget = z;

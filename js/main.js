@@ -81,11 +81,13 @@ import {
     initPixi, 
     drawGame, 
     initBgCanvas, 
-    addBloodSplatterToBg 
+    addBloodSplatterToBg,
+    addToxicSplatterToBg
 } from './renderer.js';
 
 import { 
-    initAudioEngine 
+    initAudioEngine,
+    playHoverBeep
 } from './audio.js';
 
 // 1. POPULATE OBJECT POOLS
@@ -109,6 +111,7 @@ entityHooks.getCritChance = getCritChance;
 entityHooks.getCritMultiplier = getCritMultiplier;
 entityHooks.getWeaponDamage = getWeaponDamage;
 entityHooks.addBloodSplatterToBg = addBloodSplatterToBg;
+entityHooks.addToxicSplatterToBg = addToxicSplatterToBg;
 
 systemHooks.dispatchDOMUpdates = dispatchDOMUpdates;
 systemHooks.updateActiveSkillCooldownUI = updateActiveSkillCooldownUI;
@@ -178,11 +181,11 @@ function setupCanvas() {
         }
     }
     
-    initBgCanvas(activeCanvas.width, activeCanvas.height);
+    initBgCanvas(activeCanvas.clientWidth, activeCanvas.clientHeight);
     
     if (player) {
-        player.x = activeCanvas.width / 2;
-        const barricadeY = activeCanvas.height - 160;
+        player.x = activeCanvas.clientWidth / 2;
+        const barricadeY = activeCanvas.clientHeight - 160;
         player.y = barricadeY + 30; 
         player.targetX = player.x;
     }
@@ -221,20 +224,7 @@ function handleCanvasMouseDown(e) {
             const activeWep = gameState.weapons[gameState.activeWeaponIndex];
             if (!activeWep || isReloading.value) return;
             
-            let shootSpeedInterval = 0.5;
-            switch(activeWep.id) {
-                case 'pistol': shootSpeedInterval = 0.42; break;
-                case 'smg': shootSpeedInterval = 0.08; break;
-                case 'shotgun': shootSpeedInterval = 1.15; break;
-                case 'rifle': shootSpeedInterval = 0.15; break;
-                case 'flame': shootSpeedInterval = 0.05; break;
-                case 'plasma': shootSpeedInterval = 0.85; break;
-                case 'freeze': shootSpeedInterval = 0.55; break;
-                case 'gatling': shootSpeedInterval = 0.04; break;
-                case 'tesla': shootSpeedInterval = 0.15; break;
-                case 'nuclear': shootSpeedInterval = 2.4; break;
-            }
-            
+            const shootSpeedInterval = activeWep.shootInterval || 0.5;
             const currentSpeed = activeSkillsDuration.overclock > 0 ? (shootSpeedInterval * 0.35) : shootSpeedInterval;
             
             if (mainWeaponShootTimer.value >= currentSpeed) {
@@ -376,6 +366,24 @@ document.addEventListener('fullscreenchange', () => {
     }
 });
 
+const crtToggleBtn = document.getElementById('crt-toggle');
+const crtIcon = document.getElementById('crt-icon');
+if (crtToggleBtn) {
+    crtToggleBtn.addEventListener('click', () => {
+        document.body.classList.toggle('crt-off');
+        const isOff = document.body.classList.contains('crt-off');
+        if (crtIcon) {
+            if (isOff) {
+                crtIcon.className = 'fa-solid fa-tv text-zinc-500';
+                crtToggleBtn.className = 'w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition';
+            } else {
+                crtIcon.className = 'fa-solid fa-tv text-teal-400';
+                crtToggleBtn.className = 'w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-teal-400 hover:text-white hover:bg-zinc-800 transition';
+            }
+        }
+    });
+}
+
 const btnSaveManager = document.getElementById('btn-save-manager');
 if (btnSaveManager) {
     btnSaveManager.addEventListener('click', () => {
@@ -391,7 +399,7 @@ if (btnSaveManager) {
         
         const t = textPool.find(ft => !ft.active);
         if (t && canvas) {
-            t.spawn(canvas.width / 2, canvas.height / 2 - 40, "ĐÃ LƯU TIẾN TRÌNH", "#10b981", 14, true);
+            t.spawn(canvas.clientWidth / 2, canvas.clientHeight / 2 - 40, "ĐÃ LƯU TIẾN TRÌNH", "#10b981", 14, true);
         }
     });
 }
@@ -442,6 +450,7 @@ if (btnEvacuate) {
 // 9. EXPOSE GLOBALLY FOR HTML ONCLICK BINDINGS
 import('./ui.js').then(uiModule => {
     window.game = {
+        playHoverBeep,
         switchTab: uiModule.switchTab,
         togglePauseGame: uiModule.togglePauseGame,
         closeModal: uiModule.closeModal,

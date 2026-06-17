@@ -20,7 +20,9 @@ import {
     shakeTime, 
     dayNightCycle, 
     canvas,
-    pixi
+    pixi,
+    isReloading,
+    reloadTimer
 } from '../state.js';
 
 import { 
@@ -28,7 +30,9 @@ import {
 } from '../entities.js';
 
 import { 
-    getWeaponDamage 
+    getWeaponDamage,
+    getMercenaryRange,
+    getActiveWeaponRange
 } from '../systems.js';
 
 export function initTextPool() {
@@ -52,8 +56,8 @@ export function initPixi() {
     if (!canvas) return;
     pixi.app = new PIXI.Application({
         view: canvas,
-        width: canvas.width,
-        height: canvas.height,
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
         backgroundAlpha: 0
@@ -65,7 +69,7 @@ export function initPixi() {
     pixi.bgGraphics = new PIXI.Graphics();
     pixi.shakeContainer.addChild(pixi.bgGraphics);
     
-    pixi.bloodTexture = PIXI.RenderTexture.create({ width: canvas.width, height: canvas.height });
+    pixi.bloodTexture = PIXI.RenderTexture.create({ width: canvas.clientWidth, height: canvas.clientHeight });
     pixi.bloodSprite = new PIXI.Sprite(pixi.bloodTexture);
     pixi.shakeContainer.addChild(pixi.bloodSprite);
     
@@ -218,13 +222,41 @@ export function addBloodSplatterToBg(worldX, worldY, radius) {
     bloodG.destroy();
 }
 
+export function addToxicSplatterToBg(worldX, worldY, radius) {
+    if (!pixi.app || !pixi.bloodTexture) return;
+    
+    const pt = project3D(worldX, worldY, 0);
+    const screenRadius = radius * pt.scale;
+    
+    const toxicG = new PIXI.Graphics();
+    const baseColor = 0x14532d; // dark forest green
+    const baseAlpha = Math.random() * 0.22 + 0.18;
+    
+    toxicG.beginFill(baseColor, baseAlpha);
+    toxicG.drawEllipse(pt.x, pt.y, screenRadius * 1.1, screenRadius * 0.65);
+    toxicG.endFill();
+    
+    const dropQuantity = Math.floor(Math.random() * 4 + 3);
+    for (let i = 0; i < dropQuantity; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * 12 * pt.scale;
+        const dropR = (Math.random() * 2 + 1) * pt.scale;
+        toxicG.beginFill(0x22c55e, baseAlpha * 1.1); // bright toxic green
+        toxicG.drawEllipse(pt.x + Math.cos(angle) * dist, pt.y + Math.sin(angle) * dist, dropR, dropR * 0.65);
+        toxicG.endFill();
+    }
+    
+    pixi.app.renderer.render(toxicG, { renderTexture: pixi.bloodTexture, clear: false });
+    toxicG.destroy();
+}
+
 export function drawBarricadePixi() {
     if (!pixi.barricadeGraphics) return;
     const g = pixi.barricadeGraphics;
     g.clear();
     
-    const logicalWidth = canvas.width;
-    const barricadeY = canvas.height - 160;
+    const logicalWidth = canvas.clientWidth;
+    const barricadeY = canvas.clientHeight - 160;
     
     const wallH = 28;
     const wallDepth = 12;
@@ -513,16 +545,74 @@ export function drawPlayerPixi() {
         g.endFill();
         
         if (player.flashTimer > 0) {
-            g.beginFill(0xfde047, 0.3);
-            g.drawCircle(barrelX, barrelY, 20);
+            let flashLen = 14;
+            let flashWidth = 5;
+            switch (activeWep.id) {
+                case 'pistol': flashLen = 11; flashWidth = 3.5; break;
+                case 'smg': flashLen = 13; flashWidth = 4.5; break;
+                case 'shotgun': flashLen = 22; flashWidth = 9; break;
+                case 'rifle': flashLen = 18; flashWidth = 5; break;
+                case 'gatling': flashLen = 22; flashWidth = 6.5; break;
+                case 'nuclear': flashLen = 28; flashWidth = 10; break;
+                case 'plasma': flashLen = 16; flashWidth = 6.5; break;
+                default: flashLen = 14; flashWidth = 4.5;
+            }
+            
+            g.lineStyle(0);
+            
+            // Outer glow spike (yellow/orange)
+            g.beginFill(0xfbbf24, 0.45);
+            g.drawPolygon([
+                barrelX - nx * flashWidth * 1.4, barrelY - ny * flashWidth * 1.4,
+                barrelX + gunDirX * flashLen * 1.4, barrelY + gunDirY * flashLen * 1.4,
+                barrelX + nx * flashWidth * 1.4, barrelY + ny * flashWidth * 1.4,
+                barrelX - gunDirX * flashLen * 0.3, barrelY - gunDirY * flashLen * 0.3
+            ]);
             g.endFill();
-            g.beginFill(0xfbbf24, 0.7);
-            g.drawCircle(barrelX, barrelY, 8);
-            g.endFill();
+            
+            // Inner hot core spike (white/yellow)
             g.beginFill(0xffffff, 0.9);
-            g.drawCircle(barrelX, barrelY, 3.5);
+            g.drawPolygon([
+                barrelX - nx * flashWidth * 0.6, barrelY - ny * flashWidth * 0.6,
+                barrelX + gunDirX * flashLen * 0.85, barrelY + gunDirY * flashLen * 0.85,
+                barrelX + nx * flashWidth * 0.6, barrelY + ny * flashWidth * 0.6,
+                barrelX - gunDirX * flashLen * 0.15, barrelY - gunDirY * flashLen * 0.15
+            ]);
+            g.endFill();
+            
+            // Side sparks/flaps (cross shape muzzle flash)
+            g.beginFill(0xfbbf24, 0.85);
+            const sideLen = flashLen * 0.45;
+            const sideW = flashWidth * 0.6;
+            // Left flank
+            g.drawPolygon([
+                barrelX, barrelY,
+                barrelX + (gunDirX - nx) * sideLen, barrelY + (gunDirY - ny) * sideLen,
+                barrelX - nx * sideW, barrelY - ny * sideW
+            ]);
+            // Right flank
+            g.drawPolygon([
+                barrelX, barrelY,
+                barrelX + (gunDirX + nx) * sideLen, barrelY + (gunDirY + ny) * sideLen,
+                barrelX + nx * sideW, barrelY + ny * sideW
+            ]);
             g.endFill();
         }
+    }
+    
+    // Circular Reloading indicator above helmet
+    if (isReloading.value && activeWep && activeWep.reloadTime > 0) {
+        const progress = Math.max(0, Math.min(1.0, 1.0 - (reloadTimer.value / activeWep.reloadTime)));
+        const startAng = -Math.PI / 2; // start from top
+        const endAng = startAng + (Math.PI * 2 * progress);
+        
+        // Draw background track ring
+        g.lineStyle(2.2, 0x334155, 0.45);
+        g.drawCircle(0, -25, 7.5);
+        
+        // Draw active progress arc
+        g.lineStyle(2.2, 0x38bdf8, 1.0); // Bright cyan
+        g.arc(0, -25, 7.5, startAng, endAng);
     }
 }
 
@@ -541,25 +631,40 @@ export function drawMercsPixi() {
             return;
         }
         g.visible = true;
+
+        // Ensure position is initialized dynamically
+        if (m.x === undefined) {
+            const barricadeY = canvas.clientHeight - 160;
+            m.y = barricadeY + 30;
+            if (m.id === 'merc_recruit') m.x = canvas.clientWidth * 0.20;
+            else if (m.id === 'merc_sniper') m.x = canvas.clientWidth * 0.35;
+            else if (m.id === 'merc_gunner') m.x = canvas.clientWidth * 0.65;
+            else if (m.id === 'merc_medic') m.x = canvas.clientWidth * 0.80;
+            else if (m.id === 'merc_drone') m.x = canvas.clientWidth * 0.92;
+            else m.x = canvas.clientWidth * 0.5;
+            
+            m.angle = -Math.PI / 2;
+            m.screenAngle = -Math.PI / 2;
+            m.walkCycle = 0;
+            m.speed = 110;
+            m.targetX = m.x;
+            m.flashTimer = 0;
+            m.recoil = 0;
+        }
         
-        const barricadeY = canvas.height - 160;
-        const allyY = barricadeY + 30;
-        let allyX = canvas.width * 0.5;
-        if (m.id === 'merc_recruit') allyX = canvas.width * 0.20;
-        else if (m.id === 'merc_sniper') allyX = canvas.width * 0.35;
-        else if (m.id === 'merc_gunner') allyX = canvas.width * 0.65;
-        else if (m.id === 'merc_medic') allyX = canvas.width * 0.80;
-        else if (m.id === 'merc_drone') allyX = canvas.width * 0.92;
-        
-        const target = getPrioritizedZombie();
+        const activeWep = gameState.weapons[gameState.activeWeaponIndex];
+        const range = activeWep ? getActiveWeaponRange(activeWep.id) : getMercenaryRange(m.id);
+        const target = getPrioritizedZombie(m.x, m.y, range);
         let mercAim = -Math.PI / 2;
         if (target) {
-            mercAim = Math.atan2(target.y - allyY, target.x - allyX);
+            mercAim = Math.atan2(target.y - m.y, target.x - m.x);
         }
         
         if (m.id === 'merc_drone') {
             const floatOffset = Math.sin(Date.now() / 240) * 5;
-            const pt = project3D(allyX, allyY + floatOffset, 12);
+            const drawX = m.x - Math.cos(mercAim) * (m.recoil || 0);
+            const drawY = m.y + floatOffset - Math.sin(mercAim) * (m.recoil || 0);
+            const pt = project3D(drawX, drawY, 12);
             g.position.set(pt.x, pt.y);
             g.scale.set(pt.scale * 1.3);
             
@@ -585,32 +690,67 @@ export function drawMercsPixi() {
             g.moveTo(0, 0);
             g.lineTo(gunDirX * 12, gunDirY * 12);
             
-            if (m.fireTimer && m.fireTimer > 0) {
+            if (activeWep && m.flashTimer && m.flashTimer > 0) {
+                const barrelX = gunDirX * 12;
+                const barrelY = gunDirY * 12;
+                
+                let flashLen = 14;
+                let flashWidth = 4.5;
+                switch (activeWep.id) {
+                    case 'pistol': flashLen = 11; flashWidth = 3.5; break;
+                    case 'smg': flashLen = 13; flashWidth = 4.5; break;
+                    case 'shotgun': flashLen = 22; flashWidth = 9; break;
+                    case 'rifle': flashLen = 18; flashWidth = 5; break;
+                    case 'gatling': flashLen = 22; flashWidth = 6.5; break;
+                    case 'nuclear': flashLen = 28; flashWidth = 10; break;
+                    case 'plasma': flashLen = 16; flashWidth = 6.5; break;
+                    default: flashLen = 14; flashWidth = 4.5;
+                }
+                
+                const nx = -gunDirY;
+                const ny = gunDirX;
+                
                 g.lineStyle(0);
-                g.beginFill(0x06b6d4, 0.6);
-                g.drawCircle(gunDirX * 14, gunDirY * 14, 5);
+                g.beginFill(0xfbbf24, 0.45);
+                g.drawPolygon([
+                    barrelX - nx * flashWidth * 1.4, barrelY - ny * flashWidth * 1.4,
+                    barrelX + gunDirX * flashLen * 1.4, barrelY + gunDirY * flashLen * 1.4,
+                    barrelX + nx * flashWidth * 1.4, barrelY + ny * flashWidth * 1.4,
+                    barrelX - gunDirX * flashLen * 0.3, barrelY - gunDirY * flashLen * 0.3
+                ]);
+                g.endFill();
+                
+                g.beginFill(0xffffff, 0.95);
+                g.drawPolygon([
+                    barrelX - nx * flashWidth * 0.6, barrelY - ny * flashWidth * 0.6,
+                    barrelX + gunDirX * flashLen * 0.85, barrelY + gunDirY * flashLen * 0.85,
+                    barrelX + nx * flashWidth * 0.6, barrelY + ny * flashWidth * 0.6,
+                    barrelX - gunDirX * flashLen * 0.15, barrelY - gunDirY * flashLen * 0.15
+                ]);
                 g.endFill();
             }
         } else {
-            const pt = project3D(allyX, allyY, 10);
+            const drawX = m.x - Math.cos(mercAim) * (m.recoil || 0);
+            const drawY = m.y - Math.sin(mercAim) * (m.recoil || 0);
+            const pt = project3D(drawX, drawY, 10);
             const sc = pt.scale * 1.25;
             
             g.position.set(pt.x, pt.y);
             g.scale.set(sc);
             g.rotation = 0;
             
-            const legSway = Math.sin(Date.now() / 150 + allyX) * 2;
+            const legSway = Math.sin(m.walkCycle || 0) * 3;
             g.lineStyle(0);
             g.beginFill(0x020617);
-            g.drawEllipse(-4.5, 12 + legSway, 2.5, 1.5);
-            g.drawEllipse(4.5, 12 - legSway, 2.5, 1.5);
+            g.drawEllipse(-5, 14 + legSway, 3, 1.8);
+            g.drawEllipse(5, 14 - legSway, 3, 1.8);
             g.endFill();
             
-            g.lineStyle(4, 0x0f172a);
-            g.moveTo(-3.5, 1.5);
-            g.lineTo(-4.5, 12 + legSway);
-            g.moveTo(3.5, 1.5);
-            g.lineTo(4.5, 12 - legSway);
+            g.lineStyle(4.5, 0x0f172a);
+            g.moveTo(-4, 2);
+            g.lineTo(-5, 14 + legSway);
+            g.moveTo(4, 2);
+            g.lineTo(5, 14 - legSway);
             
             let torsoColor = 0x1e3a8a;
             let backpackColor = 0xea580c;
@@ -634,61 +774,65 @@ export function drawMercsPixi() {
                 helmetColor = 0x0f766e;
             }
             
-            g.lineStyle(1.5, torsoColor * 0.8);
+            const mercWepId = activeWep ? activeWep.id : 'pistol';
+            
+            g.lineStyle(1.8, torsoColor * 0.8);
             g.beginFill(torsoColor);
-            g.drawEllipse(0, -2, 8.5, 7);
+            g.drawEllipse(0, -2, 10, 8);
             g.endFill();
             
-            g.lineStyle(1.0, backpackColor * 0.7);
+            g.lineStyle(1.2, backpackColor * 0.8);
             g.beginFill(backpackColor);
-            g.drawRoundedRect(-4.5, -5.5, 9, 8, 1.5);
+            g.drawRoundedRect(-5.5, -6.5, 11, 9, 2);
             g.endFill();
             
-            if (m.id === 'merc_medic') {
-                g.lineStyle(1.2, 0xef4444);
-                g.moveTo(0, -3.5); g.lineTo(0, -0.5);
-                g.moveTo(-1.5, -2); g.lineTo(1.5, -2);
-            }
+            // Balo sọc đen scifi
+            g.lineStyle(1.0, 0x1e293b, 0.65);
+            g.moveTo(-3, -2);
+            g.lineTo(3, -2);
+            g.moveTo(-3, 1);
+            g.lineTo(3, 1);
             
             g.lineStyle(0);
             g.beginFill(helmetColor);
-            g.drawCircle(0, -10, 5.2);
+            g.drawCircle(0, -11, 6.2);
             g.endFill();
             
-            g.lineStyle(1.0, 0x0f172a);
-            g.moveTo(-3.5, -8.2);
-            g.lineTo(3.5, -8.2);
+            g.lineStyle(1.2, 0x0f172a);
+            g.moveTo(-4.5, -9);
+            g.lineTo(4.5, -9);
             
-            const armLen = 9;
+            const armLen = 10;
             const handX = Math.cos(mercAim) * armLen;
-            const handY = -3.5 + Math.sin(mercAim) * armLen;
+            const handY = -4 + Math.sin(mercAim) * armLen;
             
-            g.lineStyle(3.0, torsoColor);
-            g.moveTo(-5.5, -3.5);
+            g.lineStyle(3.5, torsoColor * 0.9);
+            g.moveTo(-6, -4);
             g.lineTo(handX, handY);
-            g.moveTo(5.5, -3.5);
+            g.moveTo(6, -4);
             g.lineTo(handX, handY);
+            
+            let gunW = 4, gunH = 12, gunColor = 0x1e293b, barrelExt = 5;
+            switch (mercWepId) {
+                case 'pistol':   gunW=3; gunH=8;  gunColor=0x1e293b; barrelExt=5;  break;
+                case 'smg':      gunW=4; gunH=13; gunColor=0x1e293b; barrelExt=4;  break;
+                case 'shotgun':  gunW=5; gunH=15; gunColor=0x451a03; barrelExt=5;  break;
+                case 'rifle':    gunW=4; gunH=18; gunColor=0x1e293b; barrelExt=6;  break;
+                case 'flame':    gunW=6; gunH=12; gunColor=0xef4444; barrelExt=4;  break;
+                case 'plasma':   gunW=6; gunH=16; gunColor=0x0891b2; barrelExt=5;  break;
+                case 'freeze':   gunW=5; gunH=14; gunColor=0x0284c7; barrelExt=5;  break;
+                case 'gatling':  gunW=7; gunH=18; gunColor=0xd97706; barrelExt=8;  break;
+                case 'tesla':    gunW=6; gunH=17; gunColor=0x0891b2; barrelExt=6;  break;
+                case 'nuclear':  gunW=7; gunH=20; gunColor=0x15803d; barrelExt=7;  break;
+            }
             
             const gunDirX = Math.cos(mercAim);
             const gunDirY = Math.sin(mercAim);
-            g.lineStyle(0);
-            const gx = handX;
-            const gy = handY;
-            let gunW = 3, gunH = 11, gunColor = 0x1e293b, barrelExt = 4;
-            
-            if (m.id === 'merc_recruit') {
-                gunW = 3; gunH = 10; gunColor = 0x1e293b; barrelExt = 3;
-            } else if (m.id === 'merc_sniper') {
-                gunW = 3.2; gunH = 18; gunColor = 0x0f172a; barrelExt = 8;
-            } else if (m.id === 'merc_gunner') {
-                gunW = 5.0; gunH = 14; gunColor = 0x334155; barrelExt = 5;
-            } else if (m.id === 'merc_medic') {
-                gunW = 2.5; gunH = 8; gunColor = 0x0f766e; barrelExt = 2;
-            }
-            
             const nx = -gunDirY;
             const ny = gunDirX;
             const hw = gunW * 0.5;
+            const gx = handX;
+            const gy = handY;
             
             g.beginFill(gunColor);
             g.drawPolygon([
@@ -699,26 +843,70 @@ export function drawMercsPixi() {
             ]);
             g.endFill();
             
-            if (m.id === 'merc_sniper') {
-                g.beginFill(0x475569);
-                g.drawRect(gx + gunDirX * 5 - nx * 1.5, gy + gunDirY * 5 - ny * 1.5, 3.5, 1.2);
-                g.endFill();
-            }
+            g.lineStyle(1.2, 0xffffff, 0.22);
+            g.moveTo(gx - nx * hw, gy - ny * hw);
+            g.lineTo(gx + gunDirX * gunH - nx * hw, gy + gunDirY * gunH - ny * hw);
             
             const barrelX = gx + gunDirX * (gunH + barrelExt);
             const barrelY = gy + gunDirY * (gunH + barrelExt);
             
             g.lineStyle(0);
             g.beginFill(0x020617);
-            g.drawCircle(barrelX, barrelY, gunW * 0.3);
+            g.drawCircle(barrelX, barrelY, gunW * 0.35);
             g.endFill();
             
-            if (m.fireTimer && m.fireTimer > 0) {
-                g.beginFill(0xfde047, 0.45);
-                g.drawCircle(barrelX, barrelY, 12);
+            if (activeWep && m.flashTimer && m.flashTimer > 0) {
+                let flashLen = 14;
+                let flashWidth = 4.5;
+                switch (activeWep.id) {
+                    case 'pistol': flashLen = 11; flashWidth = 3.5; break;
+                    case 'smg': flashLen = 13; flashWidth = 4.5; break;
+                    case 'shotgun': flashLen = 22; flashWidth = 9; break;
+                    case 'rifle': flashLen = 18; flashWidth = 5; break;
+                    case 'gatling': flashLen = 22; flashWidth = 6.5; break;
+                    case 'nuclear': flashLen = 28; flashWidth = 10; break;
+                    case 'plasma': flashLen = 16; flashWidth = 6.5; break;
+                    default: flashLen = 14; flashWidth = 4.5;
+                }
+                
+                g.lineStyle(0);
+                
+                // Outer glow spike (yellow/orange)
+                g.beginFill(0xfbbf24, 0.45);
+                g.drawPolygon([
+                    barrelX - nx * flashWidth * 1.4, barrelY - ny * flashWidth * 1.4,
+                    barrelX + gunDirX * flashLen * 1.4, barrelY + gunDirY * flashLen * 1.4,
+                    barrelX + nx * flashWidth * 1.4, barrelY + ny * flashWidth * 1.4,
+                    barrelX - gunDirX * flashLen * 0.3, barrelY - gunDirY * flashLen * 0.3
+                ]);
                 g.endFill();
-                g.beginFill(0xffffff, 0.85);
-                g.drawCircle(barrelX, barrelY, 3.5);
+                
+                // Inner hot core spike (white/yellow)
+                g.beginFill(0xffffff, 0.95);
+                g.drawPolygon([
+                    barrelX - nx * flashWidth * 0.6, barrelY - ny * flashWidth * 0.6,
+                    barrelX + gunDirX * flashLen * 0.85, barrelY + gunDirY * flashLen * 0.85,
+                    barrelX + nx * flashWidth * 0.6, barrelY + ny * flashWidth * 0.6,
+                    barrelX - gunDirX * flashLen * 0.15, barrelY - gunDirY * flashLen * 0.15
+                ]);
+                g.endFill();
+                
+                // Side sparks/flaps (cross shape muzzle flash)
+                g.beginFill(0xfbbf24, 0.85);
+                const sideLen = flashLen * 0.45;
+                const sideW = flashWidth * 0.6;
+                // Left flank
+                g.drawPolygon([
+                    barrelX, barrelY,
+                    barrelX + (gunDirX - nx) * sideLen, barrelY + (gunDirY - ny) * sideLen,
+                    barrelX - nx * sideW, barrelY - ny * sideW
+                ]);
+                // Right flank
+                g.drawPolygon([
+                    barrelX, barrelY,
+                    barrelX + (gunDirX + nx) * sideLen, barrelY + (gunDirY + ny) * sideLen,
+                    barrelX + nx * sideW, barrelY + ny * sideW
+                ]);
                 g.endFill();
             }
         }
@@ -733,11 +921,11 @@ export function drawBulletsPixi() {
     activeFlashes.forEach(f => {
         const pt = project3D(f.x, f.y, 0);
         g.lineStyle(0);
-        g.beginFill(0xfde047, 0.15 * (f.life / 0.05));
-        g.drawCircle(pt.x, pt.y, 35 * pt.scale);
+        g.beginFill(0xfde047, 0.04 * (f.life / 0.05)); // Faint ambient light glow on ground
+        g.drawCircle(pt.x, pt.y, 45 * pt.scale);
         g.endFill();
-        g.beginFill(0xfde047, 0.5 * (f.life / 0.05));
-        g.drawCircle(pt.x, pt.y, 12 * pt.scale);
+        g.beginFill(0xfbbf24, 0.10 * (f.life / 0.05)); // Faint center reflection
+        g.drawCircle(pt.x, pt.y, 14 * pt.scale);
         g.endFill();
     });
     
@@ -765,13 +953,41 @@ export function drawBulletsPixi() {
         } else if (b.isFlame) {
             const ageRatio = Math.max(0, b.life / 0.35);
             const rad = b.size * ptScale;
+            
+            // Wobble/Turbulence effect to make the fire feel alive
+            const wobbleX = Math.sin(b.life * 60 + b.startX) * 4 * ptScale;
+            const wobbleY = Math.cos(b.life * 60 + b.startY) * 4 * ptScale;
+            const fx = drawX + wobbleX;
+            const fy = drawY + wobbleY;
+            
             g.lineStyle(0);
-            g.beginFill(0xef4444, ageRatio * 0.4);
-            g.drawCircle(drawX, drawY, rad);
+            
+            // Outer red flame glow
+            g.beginFill(0xef4444, ageRatio * 0.25);
+            g.drawCircle(fx, fy, rad);
             g.endFill();
-            g.beginFill(0xf97316, ageRatio * 0.7);
-            g.drawCircle(drawX, drawY, rad * 0.5);
+            
+            // Middle orange flame
+            g.beginFill(0xf97316, ageRatio * 0.65);
+            g.drawCircle(fx, fy, rad * 0.7);
             g.endFill();
+            
+            // Inner yellow flame
+            g.beginFill(0xfacc15, ageRatio * 0.85);
+            g.drawCircle(fx, fy, rad * 0.45);
+            g.endFill();
+            
+            // Hot white core
+            g.beginFill(0xffffff, ageRatio * 0.95);
+            g.drawCircle(fx, fy, rad * 0.22);
+            g.endFill();
+            
+            // Blue flame base close to nozzle
+            if (b.life > 0.28) {
+                g.beginFill(0x38bdf8, (b.life - 0.28) * 6);
+                g.drawCircle(fx, fy, rad * 0.35);
+                g.endFill();
+            }
         } else if (b.isFreeze) {
             g.lineStyle(0);
             g.beginFill(0x38bdf8);
@@ -834,7 +1050,7 @@ export function drawParticlesPixi() {
         const ptShadow = project3D(p.x, p.y, 0);
         const ratio = Math.max(0, p.life / p.maxLife);
         
-        if ((p.type === 'shell' || p.type === 'coin') && p.z > 0) {
+        if ((p.type === 'shell' || p.type === 'coin' || p.type === 'metal_shard') && p.z > 0) {
             g.lineStyle(0);
             g.beginFill(0x000000, 0.18 * ratio);
             g.drawCircle(ptShadow.x, ptShadow.y, p.size * 0.8 * ptShadow.scale);
@@ -868,11 +1084,83 @@ export function drawParticlesPixi() {
             g.lineTo(pts[3].x, pts[3].y);
             g.closePath();
             g.endFill();
+        } else if (p.type === 'metal_shard') {
+            g.lineStyle(1, 0x3f3f46, ratio);
+            g.beginFill(0xa1a1aa, ratio);
+            
+            const cos = Math.cos(p.angle);
+            const sin = Math.sin(p.angle);
+            const w = pSize * 1.8;
+            const h = pSize * 1.2;
+            
+            const pts = [
+                { x: -w/2, y: -h/2 },
+                { x: w/2, y: -h/3 },
+                { x: w/4, y: h/2 },
+                { x: -w/2, y: h/3 }
+            ].map(ptCoord => ({
+                x: pt.x + (ptCoord.x * cos - ptCoord.y * sin),
+                y: pt.y + (ptCoord.x * sin + ptCoord.y * cos)
+            }));
+            
+            g.moveTo(pts[0].x, pts[0].y);
+            g.lineTo(pts[1].x, pts[1].y);
+            g.lineTo(pts[2].x, pts[2].y);
+            g.lineTo(pts[3].x, pts[3].y);
+            g.closePath();
+            g.endFill();
         } else if (p.type === 'coin') {
             g.beginFill(0xfacc15, ratio);
             g.lineStyle(1, 0xeab308, ratio);
             g.drawCircle(pt.x, pt.y, pSize);
             g.endFill();
+        } else if (p.type === 'corpse_part') {
+            const parts = p.color.split(':');
+            const baseColorStr = parts[0] || '#16a34a';
+            const partType = parts[1] || 'torso';
+            
+            const cos = Math.cos(p.angle);
+            const sin = Math.sin(p.angle);
+            
+            const parseColorStr = (str) => {
+                if (str.startsWith('#')) return parseInt(str.slice(1), 16);
+                return 0x16a34a;
+            };
+            const colorHex = parseColorStr(baseColorStr);
+            
+            if (partType === 'head') {
+                g.lineStyle(pSize / 3, 0x111827, ratio);
+                g.beginFill(colorHex, ratio);
+                g.drawCircle(pt.x, pt.y, pSize * 0.5);
+                g.endFill();
+                
+                g.lineStyle(0);
+                g.beginFill(0xef4444, ratio);
+                g.drawCircle(pt.x + (p.size * 0.15 * cos) * pt.scale, pt.y + (p.size * 0.15 * sin) * pt.scale, pSize * 0.12);
+                g.endFill();
+            } else if (partType === 'torso') {
+                g.lineStyle(pSize / 3, 0x111827, ratio);
+                g.beginFill(colorHex, ratio);
+                g.drawEllipse(pt.x, pt.y, pSize * 0.7, pSize * 0.45);
+                g.endFill();
+                
+                g.lineStyle(pSize / 4, 0xfafafa, ratio);
+                g.moveTo(pt.x - (p.size * 0.5 * cos) * pt.scale, pt.y - (p.size * 0.5 * sin) * pt.scale);
+                g.lineTo(pt.x - (p.size * 0.8 * cos) * pt.scale, pt.y - (p.size * 0.8 * sin) * pt.scale);
+            } else {
+                g.lineStyle(pSize / 2.5, colorHex, ratio);
+                const rx1 = pt.x - (p.size * 0.5 * cos) * pt.scale;
+                const ry1 = pt.y - (p.size * 0.5 * sin) * pt.scale;
+                const rx2 = pt.x + (p.size * 0.5 * cos) * pt.scale;
+                const ry2 = pt.y + (p.size * 0.5 * sin) * pt.scale;
+                g.moveTo(rx1, ry1);
+                g.lineTo(rx2, ry2);
+                
+                g.lineStyle(0);
+                g.beginFill(0x7f1d1d, ratio);
+                g.drawCircle(rx2, ry2, pSize * 0.18);
+                g.endFill();
+            }
         } else if (p.type === 'corpse') {
             const cos = Math.cos(p.angle);
             const sin = Math.sin(p.angle);
@@ -935,9 +1223,20 @@ export function drawParticlesPixi() {
             };
             
             g.lineStyle(0);
-            g.beginFill(parseColorStr(p.color), ratio * parseAlphaStr(p.color));
-            g.drawRect(pt.x - pSize, pt.y - pSize, pSize * 2, pSize * 2);
-            g.endFill();
+            if (p.type === 'spark') {
+                const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+                const stretch = Math.min(16, speed * 1.5) * pt.scale;
+                const angle = Math.atan2(p.vy, p.vx);
+                
+                // Draw as a beautiful streak line with round caps
+                g.lineStyle(pSize * 0.9, parseColorStr(p.color), ratio * parseAlphaStr(p.color), 0.5, true);
+                g.moveTo(pt.x, pt.y);
+                g.lineTo(pt.x - Math.cos(angle) * stretch, pt.y - Math.sin(angle) * stretch);
+            } else {
+                g.beginFill(parseColorStr(p.color), ratio * parseAlphaStr(p.color));
+                g.drawRect(pt.x - pSize, pt.y - pSize, pSize * 2, pSize * 2);
+                g.endFill();
+            }
         }
     });
 }
@@ -1059,7 +1358,7 @@ export function drawAmbientPixi() {
     if (nightIntensity > 0) {
         g.lineStyle(0);
         g.beginFill(0x0f172a, nightIntensity);
-        g.drawRect(0, 0, canvas.width, canvas.height);
+        g.drawRect(0, 0, canvas.clientWidth, canvas.clientHeight);
         g.endFill();
     }
 }
