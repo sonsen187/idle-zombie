@@ -35,7 +35,7 @@ export function initTextPool() {
     pixi.pixiTextPool.length = 0;
     for (let i = 0; i < MAX_TEXTS; i++) {
         const t = new PIXI.Text("", {
-            fontFamily: 'Rajdhani',
+            fontFamily: 'Chakra Petch',
             fontSize: 11,
             fill: 0xffffff,
             fontWeight: 'bold',

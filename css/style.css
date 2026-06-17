@@ -1,5 +1,5 @@
 body {
-    font-family: 'Rajdhani', sans-serif;
+    font-family: 'Chakra Petch', sans-serif;
     background-color: #030508;
     user-select: none;
     -webkit-user-select: none;
@@ -20,7 +20,7 @@ body::before {
     font-family: 'Creepster', cursive;
 }
 .font-tech {
-    font-family: 'Orbitron', sans-serif;
+    font-family: 'Barlow Condensed', sans-serif;
 }
 /* Custom scrollbar for tactical dashboard */
 ::-webkit-scrollbar {

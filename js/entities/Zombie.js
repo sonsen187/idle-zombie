@@ -264,11 +264,12 @@ export class Zombie {
             currentSpeed *= 0.35;
         }
 
-        if (this.y + this.radius < barricadeY) {
+        const stopY = barricadeY - 32;
+        if (this.y + this.radius < stopY) {
             this.y += currentSpeed * dt * 60;
         } else {
             if (this.impulseY >= 0) {
-                this.y = barricadeY - this.radius;
+                this.y = stopY - this.radius;
                 this.impulseY = 0;
                 
                 this.attackTimer += dt;
@@ -278,14 +279,14 @@ export class Zombie {
                         hooks.attackBarricade(this.damage);
                     }
                     shakeTime.value = 0.2;
-                    spawnExplosion(this.x, this.y + 10, '#ffffff', 4);
+                    spawnExplosion(this.x, this.y + 10 + this.radius, '#ffffff', 4);
                 }
             } else {
                 this.attackTimer = 0;
             }
         }
-        if (this.y + this.radius > barricadeY) {
-            this.y = barricadeY - this.radius;
+        if (this.y + this.radius > stopY) {
+            this.y = stopY - this.radius;
             this.impulseY = 0;
         }
     }
@@ -682,7 +683,7 @@ export class Zombie {
             if (!this.nameText) {
                 const nameCol = this.type === 'golden' ? '#facc15' : (this.type === 'necromancer' ? '#c084fc' : '#ef4444');
                 this.nameText = new PIXI.Text(this.name.toUpperCase(), {
-                    fontFamily: 'Orbitron',
+                    fontFamily: 'Barlow Condensed',
                     fontSize: 8,
                     fill: nameCol,
                     fontWeight: 'bold',

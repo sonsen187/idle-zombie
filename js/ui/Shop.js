@@ -64,7 +64,7 @@ export function renderShop() {
     let html = '';
     const currentGold = gameState.gold;
     const currentDna = gameState.dna;
-
+ 
     if (activeTab.value === 'weapons') {
         gameState.weapons.forEach((w, index) => {
             const isUnlocked = w.unlocked;
@@ -78,41 +78,41 @@ export function renderShop() {
             const reloadSec = w.reloadTime ?? INITIAL_GAME_STATE.weapons[index].reloadTime;
             
             html += `
-            <div class="bg-zinc-950 border ${activeMark ? 'border-red-600/50 shadow-[0_0_12px_rgba(239,68,68,0.1)]' : 'border-zinc-900'} p-2.5 rounded-xl flex flex-col gap-1 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800" title="${getWeaponDesc(w.id)}">
+            <div class="bg-zinc-950 border ${activeMark ? 'border-red-600/50 shadow-[0_0_12px_rgba(239,68,68,0.1)]' : 'border-zinc-900'} p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800">
                 <div class="flex items-center justify-between gap-3">
                     <div class="flex-1">
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-xs font-bold font-tech ${isUnlocked ? 'text-zinc-200' : 'text-zinc-500'}">${w.name}</span>
-                            ${activeMark ? '<span class="px-1.5 py-0.2 bg-red-600/10 border border-red-500/20 text-red-500 text-[7px] font-black rounded uppercase">ACTIVE</span>' : ''}
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-sm font-bold font-tech ${isUnlocked ? 'text-zinc-200' : 'text-zinc-500'}">${w.name}</span>
+                            ${activeMark ? '<span class="px-1.5 py-0.2 bg-red-600/10 border border-red-500/20 text-red-500 text-[9px] font-black rounded uppercase">ACTIVE</span>' : ''}
                         </div>
-                        <p class="text-[10px] text-zinc-400 mt-1">
+                        <p class="text-xs text-zinc-400 mt-1">
                             Cấp: <span class="text-white font-bold font-tech">${w.level}</span> | 
                             ST: <span class="text-orange-400 font-bold font-tech">${currentDmg}</span> 
                             ${isUnlocked ? `➔ <span class="text-emerald-400 font-bold font-tech">${nextLvlDmg}</span>` : ''}
                         </p>
-                        <p class="text-[9px] text-zinc-500 mt-0.5">
+                        <p class="text-[11px] text-zinc-500 mt-0.5">
                             Băng đạn: <span class="text-yellow-500 font-bold font-tech">${clipVal} viên</span> | 
                             Nạp đạn: <span class="text-red-400 font-bold font-tech">${reloadSec}s</span>
                         </p>
                     </div>
                     <div>
                         ${!isUnlocked ? `
-                            <button data-cost="${cost}" data-currency="gold" data-active-class="bg-yellow-500 text-black hover:bg-yellow-400" onclick="window.game.unlockWeapon(${index})" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-yellow-500 text-black hover:bg-yellow-400' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                            <button data-cost="${cost}" data-currency="gold" data-active-class="bg-yellow-500 text-black hover:bg-yellow-400" onclick="window.game.unlockWeapon(${index})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-yellow-500 text-black hover:bg-yellow-400' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                                 Mở: 🪙${formatNumber(cost)}
                             </button>
                         ` : `
                             <div class="flex flex-col gap-1">
-                                <button data-cost="${cost}" data-currency="gold" data-active-class="bg-red-600 text-white hover:bg-red-500" onclick="window.game.upgradeWeapon(${index})" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                                <button data-cost="${cost}" data-currency="gold" data-active-class="bg-red-600 text-white hover:bg-red-500" onclick="window.game.upgradeWeapon(${index})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                                     Cấp+: 🪙${formatNumber(cost)}
                                 </button>
                                 ${!activeMark ? `
-                                    <button onclick="window.game.selectWeapon(${index})" class="px-2.5 py-0.5 bg-zinc-900 text-zinc-450 rounded text-[8px] uppercase font-bold tracking-wider hover:bg-zinc-850 transition">Trang bị</button>
+                                    <button onclick="window.game.selectWeapon(${index})" class="px-2.5 py-0.5 bg-zinc-900 text-zinc-400 rounded text-[10px] uppercase font-bold tracking-wider hover:bg-zinc-850 transition">Trang bị</button>
                                 ` : ''}
                             </div>
                         `}
                     </div>
                 </div>
-                <div class="max-h-0 overflow-hidden opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-300 text-[10px] text-zinc-500 border-t border-zinc-900/50 pt-0 group-hover:pt-1.5 mt-0 group-hover:mt-1 leading-normal font-medium">
+                <div class="text-[11px] text-zinc-550 border-t border-zinc-900/50 pt-1.5 mt-0.5 leading-relaxed font-medium">
                     ${getWeaponDesc(w.id)}
                 </div>
             </div>`;
@@ -123,7 +123,7 @@ export function renderShop() {
         const wallThornsLvl = Math.round(gameState.wallThorns / 1.5);
         const passiveScavLvl = gameState.statUpgrades.passiveScavenge;
         const goldBoostLvl = gameState.statUpgrades.goldBoost || 0;
-
+ 
         const upgrades = [
             { key: 'wallMaxHp', name: 'Độ Bền Rào Năng Lượng', pseudoLvl: maxHpLvl, current: gameState.wallMaxHp, cost: Math.round(15 * Math.pow(1.22, maxHpLvl)), icon: 'fa-shield-heart' },
             { key: 'wallRegen', name: 'Mô-đun Tự Động Vá Lỗi', pseudoLvl: wallRegenLvl, current: gameState.wallRegen.toFixed(1) + " HP/s", cost: Math.round(40 * Math.pow(1.32, wallRegenLvl)), icon: 'fa-heart-pulse' },
@@ -131,24 +131,24 @@ export function renderShop() {
             { key: 'passiveScavenge', name: 'Biệt Đội Quét Vàng (Idle)', pseudoLvl: passiveScavLvl, current: `Cấp ${passiveScavLvl} (${(passiveScavLvl * 3)} 🪙/s)`, cost: Math.round(20 * Math.pow(1.20, passiveScavLvl)), icon: 'fa-coins' },
             { key: 'goldBoost', name: 'Máy Dò Kim Loại (+15% Vàng Rơi)', pseudoLvl: goldBoostLvl, current: `Cấp ${goldBoostLvl} (+${(goldBoostLvl * 15)}%)`, cost: Math.round(25 * Math.pow(1.22, goldBoostLvl)), icon: 'fa-sack-dollar' }
         ];
-
+ 
         upgrades.forEach(u => {
             const canAfford = currentGold >= u.cost;
             html += `
-            <div class="bg-zinc-950 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800" title="${getDefenseDesc(u.key)}">
+            <div class="bg-zinc-950 border border-zinc-900 p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800">
                 <div class="flex items-center justify-between gap-3">
                     <div class="flex-1 flex items-center gap-2.5">
-                        <div class="w-7 h-7 rounded bg-zinc-900 border border-zinc-850 flex items-center justify-center text-red-500 text-xs"><i class="fa-solid ${u.icon}"></i></div>
+                        <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-850 flex items-center justify-center text-red-500 text-sm"><i class="fa-solid ${u.icon}"></i></div>
                         <div>
-                            <span class="text-xs font-bold font-tech block text-zinc-200">${u.name}</span>
-                            <p class="text-[10px] text-zinc-400 mt-0.5">Cấp: <span class="text-white font-bold font-tech">${u.current}</span></p>
+                            <span class="text-sm font-bold font-tech block text-zinc-200">${u.name}</span>
+                            <p class="text-xs text-zinc-400 mt-0.5">Cấp: <span class="text-white font-bold font-tech">${u.current}</span></p>
                         </div>
                     </div>
-                    <button data-cost="${u.cost}" data-currency="gold" data-active-class="bg-red-600 text-white hover:bg-red-500" onclick="window.game.upgradeDefense('${u.key}', ${u.cost}, ${u.pseudoLvl})" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                    <button data-cost="${u.cost}" data-currency="gold" data-active-class="bg-red-600 text-white hover:bg-red-500" onclick="window.game.upgradeDefense('${u.key}', ${u.cost}, ${u.pseudoLvl})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                         Nâng: 🪙${formatNumber(u.cost)}
                     </button>
                 </div>
-                <div class="max-h-0 overflow-hidden opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-300 text-[10px] text-zinc-500 border-t border-zinc-900/50 pt-0 group-hover:pt-1.5 mt-0 group-hover:mt-1 leading-normal font-medium">
+                <div class="text-[11px] text-zinc-550 border-t border-zinc-900/50 pt-1.5 mt-0.5 leading-relaxed font-medium">
                     ${getDefenseDesc(u.key)}
                 </div>
             </div>`;
@@ -158,13 +158,13 @@ export function renderShop() {
             const isHired = m.hired;
             const cost = m.currentCost;
             const canAfford = currentGold >= cost;
-
+ 
             const levelPowerMult = Math.pow(1.22 + (m.level * 0.003), m.level - 1);
             const nextPowerMult = Math.pow(1.22 + ((m.level + 1) * 0.003), m.level);
-
+ 
             const hiredPowerLvl = gameState.mutations.dnaHiredPower ? gameState.mutations.dnaHiredPower.level : 0;
             const hiredPowerMod = 1 + (hiredPowerLvl * (gameState.mutations.dnaHiredPower ? gameState.mutations.dnaHiredPower.mult : 0.25));
-
+ 
             let currentStat, nextStat;
             if (m.id === 'merc_medic') {
                 const currentHeal = m.wallRegenInc * m.level * Math.pow(1.15, m.level - 1) * hiredPowerMod;
@@ -175,23 +175,23 @@ export function renderShop() {
                 currentStat = `${formatNumber(Math.round(m.baseDps * levelPowerMult * hiredPowerMod))} DPS`;
                 nextStat = `${formatNumber(Math.round(m.baseDps * nextPowerMult * hiredPowerMod))} DPS`;
             }
-
+ 
             html += `
-            <div class="bg-zinc-950 border border-zinc-900 p-2.5 rounded-xl flex flex-col gap-1 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800" title="${getMercDesc(m.id)}">
+            <div class="bg-zinc-950 border border-zinc-900 p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800">
                 <div class="flex items-center justify-between gap-3">
                     <div class="flex-1">
-                        <span class="text-xs font-bold font-tech text-zinc-200 block">${m.name}</span>
-                        <p class="text-[10px] text-zinc-400 mt-1">
+                        <span class="text-sm font-bold font-tech text-zinc-200 block">${m.name}</span>
+                        <p class="text-xs text-zinc-400 mt-1">
                             Cấp: <span class="text-white font-bold font-tech">${m.level}</span> | 
                             Tác chiến: <span class="text-orange-400 font-bold font-tech">${isHired ? currentStat : 'Chưa Thuê'}</span>
                             ${isHired ? `➔ <span class="text-emerald-400 font-bold font-tech">${nextStat}</span>` : ''}
                         </p>
                     </div>
-                    <button data-cost="${cost}" data-currency="gold" data-active-class="bg-red-600 text-white hover:bg-red-500" onclick="window.game.hireOrUpgradeMerc(${idx})" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                    <button data-cost="${cost}" data-currency="gold" data-active-class="bg-red-600 text-white hover:bg-red-500" onclick="window.game.hireOrUpgradeMerc(${idx})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                         ${isHired ? 'Nâng' : 'Thuê'}: 🪙${formatNumber(cost)}
                     </button>
                 </div>
-                <div class="max-h-0 overflow-hidden opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-300 text-[10px] text-zinc-500 border-t border-zinc-900/50 pt-0 group-hover:pt-1.5 mt-0 group-hover:mt-1 leading-normal font-medium">
+                <div class="text-[11px] text-zinc-550 border-t border-zinc-900/50 pt-1.5 mt-0.5 leading-relaxed font-medium">
                     ${getMercDesc(m.id)}
                 </div>
             </div>`;
@@ -204,23 +204,23 @@ export function renderShop() {
             const boostPercent = (mut.level * mut.mult * 100).toFixed(0);
             
             html += `
-            <div class="bg-zinc-950 border border-emerald-950/40 p-2.5 rounded-xl flex flex-col gap-1 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800" title="${getMutationDesc(k)}">
+            <div class="bg-zinc-950 border border-emerald-950/40 p-3 rounded-xl flex flex-col gap-1.5 transition-all duration-300 group hover:bg-zinc-900/40 hover:border-zinc-800">
                 <div class="flex items-center justify-between gap-3">
                     <div class="flex-1">
-                        <span class="text-xs font-bold font-tech text-emerald-400 block">${mut.name}</span>
-                        <p class="text-[10px] text-zinc-400 mt-1">Đột biến: <span class="text-white font-bold font-tech">${mut.level}</span> (Hiệu quả: <span class="text-emerald-400 font-bold">+${boostPercent}%</span>)</p>
+                        <span class="text-sm font-bold font-tech text-emerald-400 block">${mut.name}</span>
+                        <p class="text-xs text-zinc-400 mt-1">Đột biến: <span class="text-white font-bold font-tech">${mut.level}</span> (Hiệu quả: <span class="text-emerald-400 font-bold">+${boostPercent}%</span>)</p>
                     </div>
-                    <button data-cost="${cost}" data-currency="dna" data-active-class="bg-emerald-600 text-white hover:bg-emerald-500" onclick="window.game.evolveMutation('${k}', ${cost})" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
+                    <button data-cost="${cost}" data-currency="dna" data-active-class="bg-emerald-600 text-white hover:bg-emerald-500" onclick="window.game.evolveMutation('${k}', ${cost})" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition active:scale-95 ${canAfford ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'bg-zinc-900 text-zinc-650'}" ${!canAfford ? 'disabled' : ''}>
                         Gen: 🧬${cost}
                     </button>
                 </div>
-                <div class="max-h-0 overflow-hidden opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-300 text-[10px] text-zinc-500 border-t border-zinc-900/50 pt-0 group-hover:pt-1.5 mt-0 group-hover:mt-1 leading-normal font-medium">
+                <div class="text-[11px] text-zinc-550 border-t border-zinc-900/50 pt-1.5 mt-0.5 leading-relaxed font-medium">
                     ${getMutationDesc(k)}
                 </div>
             </div>`;
         });
     }
-
+ 
     panel.innerHTML = html;
 }
 

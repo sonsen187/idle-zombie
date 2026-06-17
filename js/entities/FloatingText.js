@@ -28,7 +28,7 @@ export class FloatingText {
                 const pt = pixi.pixiTextPool[idx];
                 pt.text = text;
                 pt.style.fontSize = isCrit ? size + 4 : size;
-                pt.style.fontFamily = isCrit ? 'Orbitron' : 'Rajdhani';
+                pt.style.fontFamily = isCrit ? 'Barlow Condensed' : 'Chakra Petch';
                 
                 let parseColor = 0xffffff;
                 if (color.startsWith('#')) {
