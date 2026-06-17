@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Zombie Survivor - Tactical Command PC</title>
+    <!-- Tailwind CSS for high fidelity tactical design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for scifi and futuristic atmosphere -->
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tone.js for real-time advanced synthesized audio -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- PixiJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
+    
+    <!-- Custom Scifi Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- Prevent favicon 404 log warning -->
+    <link rel="icon" href="data:,">
+</head>
+<body class="flex justify-center items-center h-screen w-screen text-slate-200 p-0 bg-black overflow-hidden select-none">
+
+<!-- Global Error Overlay for runtime debugging -->
+<div id="error-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; background:rgba(220,38,38,0.95); color:white; padding:15px; z-index:999999; font-family:monospace; font-size:12px; border-bottom:3px solid #ef4444; box-shadow:0 10px 15px -3px rgba(0,0,0,0.5); text-align:left;">
+    <h3 style="margin:0 0 5px 0; font-size:14px; font-weight:bold; color:#fef08a;">🚨 GAME RUNTIME ERROR DETECTED</h3>
+    <p id="error-msg" style="margin:0; white-space:pre-wrap;"></p>
+</div>
+<script>
+    window.addEventListener('error', function(e) {
+        var overlay = document.getElementById('error-overlay');
+        var msg = document.getElementById('error-msg');
+        if (overlay && msg) {
+            overlay.style.display = 'block';
+            msg.innerText = e.message + '\nat ' + e.filename + ':' + e.lineno + ':' + e.colno + '\n\nStack:\n' + (e.error ? e.error.stack : 'No stack trace available');
+        }
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+        var overlay = document.getElementById('error-overlay');
+        var msg = document.getElementById('error-msg');
+        if (overlay && msg) {
+            overlay.style.display = 'block';
+            msg.innerText = 'Unhandled Promise Rejection:\n' + e.reason;
+        }
+    });
+</script>
+
+<div id="game-container" class="relative w-screen h-screen bg-zinc-950 flex flex-col overflow-hidden shadow-2xl">
+    
+    <!-- TOP SLIM BAR: Tactical resource & status displays -->
+    <div class="px-4 py-1.5 bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 border-b border-zinc-900 flex justify-between items-center z-30 flex-none">
+        <div class="flex items-center gap-2">
+            <span class="text-xl text-red-600 font-zombie tracking-wider glow-red">Z-SURVIVOR</span>
+            <span class="px-1.5 py-0.5 bg-red-950/80 border border-red-600/30 rounded text-[9px] font-tech text-red-500 font-bold uppercase tracking-widest hidden sm:inline-block">TACTICAL CONSOLE v5.5</span>
+        </div>
+
+        <!-- FPS and Entities Real-time Debugging Counter -->
+        <div class="hidden md:flex items-center gap-4 text-[10px] font-tech text-zinc-500 uppercase tracking-widest">
+            <span>FPS: <span id="fps-counter" class="text-emerald-500 font-bold">--</span></span>
+            <span>Quái vật: <span id="zombie-counter" class="text-red-500 font-bold">0</span></span>
+        </div>
+
+        <!-- Compact Resource Indicators -->
+        <div class="flex items-center gap-4">
+            <!-- Global Gold display -->
+            <div class="flex items-center gap-1.5">
+                <span class="text-yellow-500 text-sm">🪙</span>
+                <div class="text-left">
+                    <p class="text-[8px] text-zinc-500 uppercase font-bold tracking-wider leading-none">Vàng</p>
+                    <p id="gold-display" class="text-sm font-tech font-bold text-yellow-400 leading-none mt-0.5">0</p>
+                </div>
+            </div>
+
+            <!-- Global DNA display -->
+            <div class="flex items-center gap-1.5">
+                <span class="text-emerald-400 text-sm">🧬</span>
+                <div class="text-left">
+                    <p class="text-[8px] text-zinc-500 uppercase font-bold tracking-wider leading-none">DNA</p>
+                    <p id="dna-display" class="text-sm font-tech font-bold text-emerald-400 leading-none mt-0.5">0</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-1">
+                <!-- Backup & Restore save button -->
+                <button id="btn-save-manager" class="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-850 flex items-center justify-center text-emerald-400 hover:text-white hover:bg-zinc-800 transition" title="Sao lưu / Khôi phục tiến trình">
+                    <i class="fa-solid fa-floppy-disk text-xs"></i>
+                </button>
+
+                <!-- Pause / Resume Button -->
+                <button id="pause-toggle" class="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-yellow-500 hover:text-white hover:bg-zinc-800 transition" title="Tạm dừng trận đấu">
+                    <i id="pause-icon" class="fa-solid fa-pause text-xs"></i>
+                </button>
+
+                <!-- Slimmed Mute Button -->
+                <button id="sound-toggle" class="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition" title="Bật/Tắt âm thanh">
+                    <i id="sound-icon" class="fa-solid fa-volume-high text-xs"></i>
+                </button>
+
+                <!-- Fullscreen Toggle Button -->
+                <button id="fullscreen-toggle" class="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 transition" title="Bật/Tắt Toàn Màn Hình">
+                    <i id="fullscreen-icon" class="fa-solid fa-expand text-xs"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN TWO-COLUMN VIEWPORT -->
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+        
+        <!-- COLUMN 1: HIGH PERFORMANCE BATTLE AREA (Left - Fixed 450px standing frame) -->
+        <div class="flex-1 flex flex-col bg-zinc-950 relative overflow-hidden h-[45%] md:h-full border-r border-zinc-900">
+            
+            <!-- Battlefield Top HUD Status Indicators - Compacted -->
+            <div class="absolute top-2.5 left-2.5 right-2.5 flex justify-between items-center z-40 pointer-events-none">
+                <!-- Tactical Wave Counter -->
+                <div class="px-2.5 py-1.5 bg-zinc-950/95 border border-zinc-900 rounded-lg flex items-center gap-3 shadow-xl backdrop-blur-md pointer-events-auto">
+                    <div class="flex flex-col">
+                        <span id="wave-title" class="font-zombie text-lg text-red-500 tracking-wider leading-none">WAVE 1</span>
+                    </div>
+                    <div class="w-16 sm:w-24 bg-zinc-900 h-1.5 rounded-full overflow-hidden border border-zinc-800 relative">
+                        <div id="wave-progress-bar" class="bg-red-600 h-full w-0 transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <!-- Live Health and Defensive statistics -->
+                <div class="flex gap-2 pointer-events-auto">
+                    <!-- Ammo / Magazine Display -->
+                    <div class="px-2.5 py-1.5 bg-zinc-950/95 border border-yellow-950/40 rounded-lg flex flex-col shadow-xl backdrop-blur-md">
+                        <span class="text-[8px] text-yellow-500 font-bold uppercase tracking-wider"><i class="fa-solid fa-layer-group"></i> Băng Đạn</span>
+                        <span id="ammo-text" class="font-tech text-xs text-yellow-400 font-bold mt-0.5">--/--</span>
+                    </div>
+
+                    <!-- Wall Barrier HP -->
+                    <div class="px-2.5 py-1.5 bg-zinc-950/95 border border-red-950/40 rounded-lg flex flex-col shadow-xl backdrop-blur-md">
+                        <span class="text-[8px] text-red-500 font-bold uppercase tracking-wider"><i class="fa-solid fa-shield-halved"></i> Rào chắn</span>
+                        <span id="wall-hp-text" class="font-tech text-xs text-red-400 font-bold mt-0.5">100/100</span>
+                    </div>
+
+                    <!-- Wall Passive DPS -->
+                    <div class="px-2.5 py-1.5 bg-zinc-950/95 border border-orange-950/40 rounded-lg flex flex-col shadow-xl backdrop-blur-md">
+                        <span class="text-[8px] text-orange-400 font-bold uppercase tracking-wider"><i class="fa-solid fa-crosshairs"></i> Hỏa lực phụ</span>
+                        <span id="auto-dps-text" class="font-tech text-xs text-orange-300 font-bold mt-0.5">0 DPS</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Optimized Canvas Core -->
+            <div class="flex-1 w-full relative" id="canvas-wrapper">
+                <canvas id="gameCanvas" class="w-full h-full block bg-zinc-950 cursor-crosshair"></canvas>
+
+                <!-- Pause overlay overlay -->
+                <div id="pause-overlay" class="absolute inset-0 bg-black/60 backdrop-blur-[2px] hidden items-center justify-center z-40 flex-col">
+                    <div class="px-8 py-5 bg-zinc-900/90 border border-zinc-800 rounded-xl text-center shadow-2xl max-w-xs">
+                        <h3 class="font-tech text-lg text-yellow-500 font-bold uppercase tracking-widest"><i class="fa-solid fa-circle-pause animate-pulse mr-1.5"></i> TẠM DỪNG</h3>
+                        <p class="text-[10px] text-zinc-400 mt-2 tracking-wider leading-relaxed">Chiến sự đã được tạm dừng. Hãy điều chỉnh chiến thuật hoặc nâng cấp trang bị trước khi tiếp tục.</p>
+                        <button onclick="window.game.togglePauseGame()" class="mt-4 px-6 py-2 bg-yellow-600 hover:bg-yellow-500 text-black font-tech font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-lg transition active:scale-95">TIẾP TỤC TRẬN ĐẤU</button>
+                    </div>
+                </div>
+
+                <!-- Floating warning overlays -->
+                <div id="boss-warning" class="absolute inset-0 bg-red-950/30 border-y border-red-600/50 pointer-events-none hidden items-center justify-center z-40 animate-pulse">
+                    <div class="text-center p-3">
+                        <p class="font-zombie text-2xl sm:text-3xl text-red-500 tracking-widest glow-red">SIÊU BOSS ĐANG ĐẾN</p>
+                        <p class="text-[9px] uppercase text-zinc-400 font-bold tracking-wider font-tech mt-1">Đại quái vật cuối làn sóng xuất hiện!</p>
+                    </div>
+                </div>
+
+                <!-- Defeated Panel with Automated repairs -->
+                <div id="defeat-overlay" class="absolute inset-0 bg-black/95 pointer-events-auto hidden flex-col items-center justify-center z-50 p-4 text-center">
+                    <i class="fa-solid fa-triangle-exclamation text-red-500 text-4xl mb-2 animate-bounce"></i>
+                    <h3 class="font-zombie text-3xl text-red-600 uppercase tracking-wider glow-red">CĂN CỨ THẤT THỦ!</h3>
+                    <p class="text-[11px] text-zinc-500 mt-1 max-w-xs mx-auto">Đội ngũ dự bị đang khôi phục năng lượng rào chắn...</p>
+                    
+                    <!-- Auto Repair Progress -->
+                    <div class="w-full bg-zinc-900 h-2 rounded-full mt-4 overflow-hidden max-w-xs relative border border-zinc-800">
+                        <div id="repair-progress-bar" class="bg-emerald-500 h-full w-0 liquid-progress"></div>
+                    </div>
+                    <p class="text-[9px] text-zinc-500 font-tech mt-2 uppercase tracking-widest">TIẾN ĐỘ: <span id="repair-percent" class="text-emerald-400">0%</span></p>
+                </div>
+                
+                <!-- Bottom PC Keybindings / Radar -->
+                <div class="absolute bottom-2.5 left-2.5 z-30 bg-zinc-950/95 border border-zinc-900 px-3 py-1.5 rounded-lg text-[9px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-3 shadow-md backdrop-blur">
+                    <span class="flex items-center gap-1"><kbd class="px-1 py-0.2 bg-zinc-800 text-white rounded">1</kbd> Không kích</span>
+                    <span class="flex items-center gap-1"><kbd class="px-1 py-0.2 bg-zinc-800 text-white rounded">2</kbd> Siêu tốc</span>
+                    <button id="autofire-toggle" class="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/40 hover:text-white font-bold flex items-center gap-1 cursor-pointer transition pointer-events-auto" title="Bật/Tắt Tự Động Bắn [F]">
+                        <i class="fa-solid fa-robot animate-pulse"></i> <span>TỰ ĐỘNG BẮN: BẬT</span>
+                    </button>
+                    <span class="text-yellow-400 flex items-center gap-1"><i class="fa-solid fa-parachute-box"></i> HỘP TIẾP TẾ: CLICK ĐỂ NHẬN VÀNG</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- COLUMN 2: TACTICAL COMMAND & SHOP - Fills the remaining space -->
+        <div class="w-full md:w-[360px] flex-none bg-zinc-900/90 flex flex-col h-[55%] md:h-full z-30 overflow-hidden">
+            
+            <!-- Tab selectors (extremely slim) -->
+            <div class="flex bg-zinc-950 border-b border-zinc-900 text-[9px] font-bold uppercase tracking-wider flex-none">
+                <button id="tab-weapons" onclick="window.game.switchTab('weapons')" class="flex-1 py-2.5 text-center transition btn-active-tab text-zinc-400 hover:text-white flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-gun text-[11px]"></i> <span>Khí tài [Q]</span>
+                </button>
+                <button id="tab-defense" onclick="window.game.switchTab('defense')" class="flex-1 py-2.5 text-center transition text-zinc-400 hover:text-white flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-shield-heart text-[11px]"></i> <span>Hàng rào [W]</span>
+                </button>
+                <button id="tab-mercs" onclick="window.game.switchTab('mercs')" class="flex-1 py-2.5 text-center transition text-zinc-400 hover:text-white flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-users text-[11px]"></i> <span>Chi viện [E]</span>
+                </button>
+                <button id="tab-mutations" onclick="window.game.switchTab('mutations')" class="flex-1 py-2.5 text-center transition text-zinc-400 hover:text-white flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-dna text-[11px]"></i> <span>Đột biến [R]</span>
+                </button>
+            </div>
+
+            <!-- Dynamic Upgrades List -->
+            <div class="flex-1 overflow-y-auto p-2.5 space-y-2 bg-zinc-950/20" id="shop-panel">
+                <!-- Dynamically loaded content -->
+            </div>
+
+            <!-- TACTICAL SKILLS & PRESTIGE COMMAND CENTER -->
+            <div class="p-3 bg-zinc-950 border-t border-zinc-900 flex flex-col gap-2 flex-none">
+                <div class="flex justify-between items-center text-[8px] font-bold uppercase tracking-widest text-zinc-500">
+                    <span>HỆ THỐNG PHÒNG THỦ</span>
+                    <span class="text-emerald-500 animate-pulse flex items-center gap-1">
+                        <span class="w-1 h-1 rounded-full bg-emerald-500"></span> ACTIVE
+                    </span>
+                </div>
+                
+                <!-- Quick Active Skills Layout -->
+                <div class="grid grid-cols-2 gap-2">
+                    <!-- Skill 1: Airstrike -->
+                    <button id="skill-airstrike-sidebar" class="relative group p-2 bg-zinc-900 hover:bg-zinc-850 border border-yellow-600/20 hover:border-yellow-500/50 rounded-lg flex items-center gap-2.5 transition active:scale-95 disabled:opacity-50">
+                        <div class="w-6.5 h-6.5 rounded bg-yellow-500/10 flex items-center justify-center text-yellow-400 text-xs">
+                            <i class="fa-solid fa-jet-fighter"></i>
+                        </div>
+                        <div class="text-left">
+                            <p class="text-[9px] font-bold uppercase text-zinc-300 leading-tight">Không kích [1]</p>
+                            <p class="text-[8px] text-zinc-500 leading-none mt-0.5">Sát thương rộng</p>
+                        </div>
+                        <div id="cooldown-airstrike" class="absolute inset-0 bg-black/90 rounded-lg hidden items-center justify-center text-[10px] font-bold text-red-500">20s</div>
+                    </button>
+                    
+                    <!-- Skill 2: Overclock -->
+                    <button id="skill-overclock-sidebar" class="relative group p-2 bg-zinc-900 hover:bg-zinc-850 border border-orange-600/20 hover:border-orange-500/50 rounded-lg flex items-center gap-2.5 transition active:scale-95 disabled:opacity-50">
+                        <div class="w-6.5 h-6.5 rounded bg-orange-500/10 flex items-center justify-center text-orange-400 text-xs">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div class="text-left">
+                            <p class="text-[9px] font-bold uppercase text-zinc-300 leading-tight">Siêu tốc [2]</p>
+                            <p class="text-[8px] text-zinc-500 leading-none mt-0.5">Xả đạn cực đại</p>
+                        </div>
+                        <div id="cooldown-overclock" class="absolute inset-0 bg-black/90 rounded-lg hidden items-center justify-center text-[10px] font-bold text-red-500">15s</div>
+                    </button>
+                </div>
+
+                <!-- Strategic Prestige Action Button -->
+                <div class="mt-0.5">
+                    <button id="btn-evacuate" class="w-full py-2 bg-gradient-to-r from-red-950/20 via-red-900/10 to-red-950/20 hover:from-red-900/20 hover:to-red-800/30 border border-red-500/20 hover:border-red-500/40 rounded-lg flex items-center justify-center gap-2 transition active:scale-95 text-center">
+                        <span class="text-emerald-400 text-xs"><i class="fa-solid fa-helicopter"></i></span>
+                        <span class="text-[9px] uppercase font-bold tracking-widest text-red-300">SƠ TÁN CHIẾN THUẬT (TRÙNG SINH ĐỔI DNA)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Save Game Manager Modal -->
+<div id="save-modal" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl max-w-md w-full text-center shadow-2xl">
+        <h3 class="font-tech text-lg text-emerald-400 uppercase tracking-widest"><i class="fa-solid fa-floppy-disk"></i> Quản Lý Lưu Trữ Tiến Trình</h3>
+        <p class="text-xs text-zinc-400 mt-2">Copy mã lưu trữ bên dưới để cất giữ, hoặc dán mã lưu trữ cũ vào để khôi phục tiến trình chơi game của bạn.</p>
+        
+        <div class="mt-4 text-left">
+            <label class="text-[10px] text-zinc-500 uppercase font-bold font-tech block mb-1">Mã Lưu Trữ Hiện Tại (Copy đoạn này):</label>
+            <textarea id="save-code-box" readonly class="w-full h-20 bg-zinc-950 border border-zinc-800 text-xs text-emerald-400 p-2 rounded-lg font-mono focus:outline-none focus:border-emerald-500 select-all"></textarea>
+            <button onclick="window.game.copySaveToClipboard()" class="mt-1.5 w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-[10px] font-bold uppercase tracking-wider transition">Sao Chép Vào Bộ Nhớ Tạm</button>
+        </div>
+
+        <div class="mt-4 text-left border-t border-zinc-800 pt-4">
+            <label class="text-[10px] text-zinc-500 uppercase font-bold font-tech block mb-1">Nhập Mã Lưu Trữ Muốn Khôi Phục:</label>
+            <textarea id="import-code-box" placeholder="Dán đoạn mã lưu trữ đã copy từ trước vào đây..." class="w-full h-20 bg-zinc-950 border border-zinc-800 text-xs text-slate-300 p-2 rounded-lg font-mono focus:outline-none focus:border-emerald-500"></textarea>
+            <button onclick="window.game.importSaveData()" class="mt-1.5 w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold uppercase tracking-wider transition">Khôi Phục Ngay Lập Tức</button>
+        </div>
+
+        <div class="flex justify-end gap-2 mt-5">
+            <button onclick="window.game.closeSaveModal()" class="px-5 py-2 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 rounded-lg text-[10px] font-bold uppercase tracking-wider transition">Đóng lại</button>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Overlay Modal -->
+<div id="info-modal" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl max-w-sm w-full text-center shadow-2xl">
+        <h3 id="modal-title" class="font-zombie text-2xl text-yellow-500 tracking-wider glow-red">THÔNG BÁO</h3>
+        <p id="modal-message" class="text-xs text-zinc-400 mt-3 leading-relaxed"></p>
+        <button onclick="window.game.closeModal()" class="mt-5 px-5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition active:scale-95">Xác Nhận</button>
+    </div>
+</div>
+
+<!-- CRT Screen Filter overlay element for military retro console vibe -->
+<div class="pointer-events-none fixed inset-0 z-50 opacity-[0.02] mix-blend-overlay bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[size:100%_4px,3px_100%]"></div>
+
+<!-- Game Engine Module Entry Point -->
+<script type="module" src="js/main.js"></script>
+
+</body>
+</html>

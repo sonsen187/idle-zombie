@@ -1,0 +1,35 @@
+# Cursor Rules for AI Coding Agents
+
+You are a senior engineer working on the **Zombie Survivor - Tactical Command PC** project. Follow these rules without exception.
+
+---
+
+## 1. Project Technology Constraints
+- **Stack**: Pure HTML5, Vanilla CSS, native ES Modules (`import`/`export`), PixiJS v7, Tone.js.
+- **No Bundlers / No Build Tools**: Do NOT introduce Webpack, Vite, Gulp, or npm package build scripts. The project MUST run directly on a simple HTTP server (e.g. `python3 -m http.server 8080`).
+- **File Extensions**: Always include the `.js` extension in import paths (e.g. `import { ... } from './state.js';`).
+
+---
+
+## 2. ES Module Live-Binding Safeguards
+ES6 imports are **read-only live bindings**. You cannot reassign imported references directly.
+- **Wrong**: `let app = null; ... app = new PIXI.Application();` (where `app` is imported).
+- **Correct**: Group mutable global references into a single exported reference container object (like `pixi` in `js/state.js`) or use setter functions (like `setGameState()`, `setCanvas()`).
+- **Wrong**: Reassigning `canvas` imported from `state.js` directly in other modules.
+- **Correct**: Read from `canvas` but mutate it via `setCanvas(c)` inside the declaring module.
+
+---
+
+## 3. Prevent Circular Dependencies
+- Never import chieflly between `entities.js`, `systems.js`, and `ui.js`.
+- Use the **Event Hooks Pattern** declared in lower modules (e.g. `entities.js` or `systems.js`) and populated by the main entry point `main.js` at runtime.
+
+---
+
+## 4. Coding & Clean Code Guidelines
+- **Surgical Changes**: Modify only the code necessary to solve the issue. Do not refactor adjacent code or format unrelated lines.
+- **Maintain Comments**: Keep all existing code comments, docstrings, and inline documentations intact.
+- **Performance**: Always use the **Object Pools** (`bulletPool`, `particlePool`, `textPool`) inside `js/state.js` instead of instantiating new objects in game cycles.
+- **Variables**: Make sure to check that all variables are imported correctly to avoid `ReferenceError`. Refer to the [AGENTS.md](file:///home/sonsen/Workspace/Personal/Idle%20Zombie/AGENTS.md) roadmap for details.
+- **No Placeholders**: Never write stub functions or add `TODO` comments. All code changes must be fully implemented and production-ready.
+- **Cache Busting**: Keep HTML meta tags for cache prevention when debugging to avoid browser file cache issues.
