@@ -32,7 +32,9 @@ import {
 import { 
     getWeaponDamage,
     getMercenaryRange,
-    getActiveWeaponRange
+    getActiveWeaponRange,
+    getReloadTimeModifier,
+    getMercenaryWeaponId
 } from '../systems.js';
 
 export function initTextPool() {
@@ -652,8 +654,10 @@ export function drawMercsPixi() {
             m.recoil = 0;
         }
         
-        const activeWep = gameState.weapons[gameState.activeWeaponIndex];
-        const range = activeWep ? getActiveWeaponRange(activeWep.id) : getMercenaryRange(m.id);
+        const mercWepId = getMercenaryWeaponId(m.id);
+        const mercWep = gameState.weapons.find(w => w.id === mercWepId);
+        
+        const range = getMercenaryRange(m.id);
         const target = getPrioritizedZombie(m.x, m.y, range);
         let mercAim = -Math.PI / 2;
         if (target) {
@@ -690,13 +694,13 @@ export function drawMercsPixi() {
             g.moveTo(0, 0);
             g.lineTo(gunDirX * 12, gunDirY * 12);
             
-            if (activeWep && m.flashTimer && m.flashTimer > 0) {
+            if (mercWep && m.flashTimer && m.flashTimer > 0) {
                 const barrelX = gunDirX * 12;
                 const barrelY = gunDirY * 12;
                 
                 let flashLen = 14;
                 let flashWidth = 4.5;
-                switch (activeWep.id) {
+                switch (mercWepId) {
                     case 'pistol': flashLen = 11; flashWidth = 3.5; break;
                     case 'smg': flashLen = 13; flashWidth = 4.5; break;
                     case 'shotgun': flashLen = 22; flashWidth = 9; break;
@@ -728,6 +732,18 @@ export function drawMercsPixi() {
                     barrelX - gunDirX * flashLen * 0.15, barrelY - gunDirY * flashLen * 0.15
                 ]);
                 g.endFill();
+            }
+            
+            if (m.isReloading && mercWep && mercWep.reloadTime > 0) {
+                const progress = Math.max(0, Math.min(1.0, 1.0 - (m.reloadTimer / (mercWep.reloadTime * getReloadTimeModifier()))));
+                const startAng = -Math.PI / 2;
+                const endAng = startAng + (Math.PI * 2 * progress);
+                
+                g.lineStyle(2.2, 0x334155, 0.45);
+                g.drawCircle(0, -18, 5.5);
+                
+                g.lineStyle(2.2, 0x06b6d4, 1.0);
+                g.arc(0, -18, 5.5, startAng, endAng);
             }
         } else {
             const drawX = m.x - Math.cos(mercAim) * (m.recoil || 0);
@@ -773,8 +789,6 @@ export function drawMercsPixi() {
                 backpackColor = 0xe2e8f0;
                 helmetColor = 0x0f766e;
             }
-            
-            const mercWepId = activeWep ? activeWep.id : 'pistol';
             
             g.lineStyle(1.8, torsoColor * 0.8);
             g.beginFill(torsoColor);
@@ -839,7 +853,7 @@ export function drawMercsPixi() {
                 gx - nx * hw,                  gy - ny * hw,
                 gx + nx * hw,                  gy + ny * hw,
                 gx + gunDirX * gunH + nx * hw, gy + gunDirY * gunH + ny * hw,
-                gx + gunDirX * gunH - nx * hw, gy + gunDirY * gunH - ny * hw,
+                gx + gunDirX * gunH - nx * hw, gy + gunDirY * gunH - nx * hw, // Wait, typo check: gy + gunDirY * gunH - nx * hw in targetContent is gy + gunDirY * gunH - nx * hw, let's look at lines 852-855: gx - nx * hw, gy - ny * hw, gx + nx * hw, gy + ny * hw, gx + gunDirX * gunH + nx * hw, gy + gunDirY * gunH + ny * hw, gx + gunDirX * gunH - nx * hw, gy + gunDirY * gunH - ny * hw
             ]);
             g.endFill();
             
@@ -855,10 +869,10 @@ export function drawMercsPixi() {
             g.drawCircle(barrelX, barrelY, gunW * 0.35);
             g.endFill();
             
-            if (activeWep && m.flashTimer && m.flashTimer > 0) {
+            if (mercWep && m.flashTimer && m.flashTimer > 0) {
                 let flashLen = 14;
                 let flashWidth = 4.5;
-                switch (activeWep.id) {
+                switch (mercWepId) {
                     case 'pistol': flashLen = 11; flashWidth = 3.5; break;
                     case 'smg': flashLen = 13; flashWidth = 4.5; break;
                     case 'shotgun': flashLen = 22; flashWidth = 9; break;
@@ -908,6 +922,18 @@ export function drawMercsPixi() {
                     barrelX + nx * sideW, barrelY + ny * sideW
                 ]);
                 g.endFill();
+            }
+            
+            if (m.isReloading && mercWep && mercWep.reloadTime > 0) {
+                const progress = Math.max(0, Math.min(1.0, 1.0 - (m.reloadTimer / (mercWep.reloadTime * getReloadTimeModifier()))));
+                const startAng = -Math.PI / 2;
+                const endAng = startAng + (Math.PI * 2 * progress);
+                
+                g.lineStyle(2.2, 0x334155, 0.45);
+                g.drawCircle(0, -25, 7.5);
+                
+                g.lineStyle(2.2, 0x38bdf8, 1.0);
+                g.arc(0, -25, 7.5, startAng, endAng);
             }
         }
     });

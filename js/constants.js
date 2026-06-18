@@ -34,11 +34,11 @@ export const INITIAL_GAME_STATE = {
         { id: 'nuclear', name: 'Pháo Phân Rã Hạt Nhân', level: 0, baseDamage: 120000, baseCost: 120000000, currentCost: 120000000, unlocked: false, clipSize: 3, currentClip: 3, reloadTime: 4.2, shootInterval: 2.8 }
     ],
     mercenaries: [
-        { id: 'merc_recruit', name: 'Binh Nhất Jack', level: 0, baseDps: 15, dpsScale: 7.5, baseCost: 60, currentCost: 60, hired: false, fireTimer: 0 },
-        { id: 'merc_sniper', name: 'Sniper Bóng Đêm', level: 0, baseDps: 90, dpsScale: 45, baseCost: 600, currentCost: 600, hired: false, fireTimer: 0 },
-        { id: 'merc_medic', name: 'Bác Sĩ Trận Địa', level: 0, baseDps: 0, dpsScale: 0, wallRegenInc: 3, baseCost: 2500, currentCost: 2500, hired: false, fireTimer: 0 },
-        { id: 'merc_gunner', name: 'Trọng Liên Heavy', level: 0, baseDps: 450, dpsScale: 220, baseCost: 8000, currentCost: 8000, hired: false, fireTimer: 0 },
-        { id: 'merc_drone', name: 'Robot Drone Sparky', level: 0, baseDps: 1500, dpsScale: 750, baseCost: 60000, currentCost: 60000, hired: false, fireTimer: 0 }
+        { id: 'merc_recruit', name: 'Binh Nhất Jack', level: 0, baseDps: 15, dpsScale: 7.5, baseCost: 180, currentCost: 180, hired: false, fireTimer: 0 },
+        { id: 'merc_sniper', name: 'Sniper Bóng Đêm', level: 0, baseDps: 90, dpsScale: 45, baseCost: 12000, currentCost: 12000, hired: false, fireTimer: 0 },
+        { id: 'merc_medic', name: 'Bác Sĩ Trận Địa', level: 0, baseDps: 0, dpsScale: 0, wallRegenInc: 3, baseCost: 2800, currentCost: 2800, hired: false, fireTimer: 0 },
+        { id: 'merc_gunner', name: 'Trọng Liên Heavy', level: 0, baseDps: 450, dpsScale: 220, baseCost: 1500000, currentCost: 1500000, hired: false, fireTimer: 0 },
+        { id: 'merc_drone', name: 'Robot Drone Sparky', level: 0, baseDps: 1500, dpsScale: 750, baseCost: 280000, currentCost: 280000, hired: false, fireTimer: 0 }
     ],
     mutations: {
         dnaDamageMult: { level: 0, cost: 5, mult: 0.20, name: 'Sợi Gen Sát Thủ (+20% Sát Thương)' },

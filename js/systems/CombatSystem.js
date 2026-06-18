@@ -87,6 +87,23 @@ export function getMercenaryRange(mercId) {
     }
 }
 
+export function getMercenaryWeaponId(mercId) {
+    switch (mercId) {
+        case 'merc_recruit': return 'smg';
+        case 'merc_sniper': return 'rifle';
+        case 'merc_gunner': return 'gatling';
+        case 'merc_medic': return 'pistol';
+        case 'merc_drone': return 'plasma';
+        default: return 'pistol';
+    }
+}
+
+export function getWeaponDamageForMerc(w) {
+    const lvl = Math.max(1, w.level);
+    const scaleFactor = Math.pow(1.18 + (lvl * 0.002), lvl - 1);
+    return Math.round(w.baseDamage * scaleFactor);
+}
+
 function spawnMuzzleSparks(x, y, angle, wepId) {
     let count = 4;
     let color = '#facc15'; // default yellow spark
@@ -359,18 +376,40 @@ export function updateMercenary(m, dt) {
         m.walkCycle = 0;
         m.speed = 110;
         m.targetX = m.x;
+        m.flashTimer = 0;
+        m.recoil = 0;
+        m.currentClip = 12;
+        m.isReloading = false;
+        m.reloadTimer = 0;
+        m.lastWeaponId = 'pistol';
     }
 
-    const activeWep = gameState.weapons[gameState.activeWeaponIndex];
-    if (!activeWep) return;
+    const mercWepId = getMercenaryWeaponId(m.id);
+    const mercWep = gameState.weapons.find(w => w.id === mercWepId);
+    if (!mercWep) return;
+
+    if (m.currentClip === undefined || m.lastWeaponId !== mercWepId) {
+        m.lastWeaponId = mercWepId;
+        m.currentClip = mercWep.clipSize;
+        m.isReloading = false;
+        m.reloadTimer = 0;
+    }
+
+    if (m.isReloading) {
+        m.reloadTimer -= dt;
+        if (m.reloadTimer <= 0) {
+            m.isReloading = false;
+            m.currentClip = mercWep.clipSize;
+        }
+    }
 
     if (m.flashTimer > 0) {
         m.flashTimer -= dt;
     }
     m.recoil = Math.max(0, (m.recoil || 0) - dt * 45);
 
-    // Range inherits from the player's active weapon range
-    const range = getActiveWeaponRange(activeWep.id);
+    // Range is mercenary-specific
+    const range = getMercenaryRange(m.id);
     const target = getPrioritizedZombie(m.x, m.y, range);
     
     if (m.id === 'merc_drone') {
@@ -420,8 +459,8 @@ export function updateMercenary(m, dt) {
         m.x = Math.max(minMercX, Math.min(maxMercX, m.x));
     }
 
-    // Fire rate inherits player's active weapon fire speed
-    const shootSpeedInterval = activeWep.shootInterval || 0.5;
+    // Fire rate inherits fixed weapon fire speed
+    const shootSpeedInterval = mercWep.shootInterval || 0.5;
     const fireInterval = activeSkillsDuration.overclock > 0 ? (shootSpeedInterval * 0.35) : shootSpeedInterval;
 
     m.fireTimer = (m.fireTimer || 0) + dt;
@@ -436,15 +475,25 @@ export function shootMercenary(m, fireInterval) {
     if (zombies.length === 0 || gameState.isDefeated) return;
     if (m.x === undefined) return;
     
-    const activeWep = gameState.weapons[gameState.activeWeaponIndex];
-    if (!activeWep) return;
+    const mercWepId = getMercenaryWeaponId(m.id);
+    const mercWep = gameState.weapons.find(w => w.id === mercWepId);
+    if (!mercWep) return;
     
-    const range = getActiveWeaponRange(activeWep.id);
+    if (m.isReloading) return;
+    
+    if (m.currentClip <= 0) {
+        m.isReloading = true;
+        m.reloadTimer = mercWep.reloadTime * getReloadTimeModifier();
+        playReloadSound();
+        return;
+    }
+    
+    const range = getMercenaryRange(m.id);
     let target = getPrioritizedZombie(m.x, m.y, range);
     if (!target) return;
 
-    // Inherit player's active weapon damage
-    const baseDamage = getWeaponDamage(activeWep);
+    // Inherit fixed weapon damage
+    const baseDamage = getWeaponDamageForMerc(mercWep);
     const levelPowerMult = Math.pow(1.22 + (m.level * 0.003), m.level - 1);
     let totalDmg = baseDamage * levelPowerMult;
     
@@ -456,7 +505,7 @@ export function shootMercenary(m, fireInterval) {
     const finalDamage = Math.round(totalDmg * (isCrit ? 1.5 : 1.0));
 
     let gunH = 12, barrelExt = 5;
-    switch (activeWep.id) {
+    switch (mercWepId) {
         case 'pistol':   gunH = 8;  barrelExt = 5;  break;
         case 'smg':      gunH = 13; barrelExt = 4;  break;
         case 'shotgun':  gunH = 15; barrelExt = 5;  break;
@@ -480,7 +529,7 @@ export function shootMercenary(m, fireInterval) {
     const startY = m.y + yOffset + Math.sin(mercAngle) * gunLength;
 
     let baseSpread = 0.01;
-    switch (activeWep.id) {
+    switch (mercWepId) {
         case 'pistol': baseSpread = 0.015; break;
         case 'smg': baseSpread = 0.035; break;
         case 'shotgun': baseSpread = 0.06; break;
@@ -496,7 +545,7 @@ export function shootMercenary(m, fireInterval) {
     const angle = mercAngle + spreadOffset;
 
     let recoilAmt = 4.0;
-    switch (activeWep.id) {
+    switch (mercWepId) {
         case 'pistol': recoilAmt = 2.8; break;
         case 'smg': recoilAmt = 1.5; break;
         case 'shotgun': recoilAmt = 16.0; break;
@@ -511,8 +560,8 @@ export function shootMercenary(m, fireInterval) {
     m.recoil = recoilAmt;
     m.flashTimer = 0.05;
 
-    // Inherit player's active weapon projectile mechanics
-    if (activeWep.id === 'shotgun') {
+    // Use fixed weapon mechanics for bullet spawns
+    if (mercWepId === 'shotgun') {
         const pelletCount = 15;
         const damagePerPellet = Math.max(1, Math.round(finalDamage / pelletCount));
         for (let i = 0; i < pelletCount; i++) {
@@ -524,7 +573,7 @@ export function shootMercenary(m, fireInterval) {
                 b.spawn(startX, startY, 0, 0, damagePerPellet, isCrit, speed, false, true, 1, pelletAngle, false, false, false, false, false, range);
             }
         }
-    } else if (activeWep.id === 'flame') {
+    } else if (mercWepId === 'flame') {
         const flameSpread = (Math.random() - 0.5) * 0.26;
         const flameAngle = mercAngle + flameSpread;
         const b = getAvailableBullet();
@@ -532,28 +581,28 @@ export function shootMercenary(m, fireInterval) {
             b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 12, false, false, 1, flameAngle, false, false, false, true, false, range);
             b.life = 0.35;
         }
-    } else if (activeWep.id === 'freeze') {
+    } else if (mercWepId === 'freeze') {
         const b = getAvailableBullet();
         if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 18, false, false, 1, angle, false, false, false, false, true, range);
-    } else if (activeWep.id === 'plasma') {
+    } else if (mercWepId === 'plasma') {
         const b = getAvailableBullet();
         if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 34, true, false, 1, angle, false, false, false, false, false, range);
-    } else if (activeWep.id === 'gatling') {
+    } else if (mercWepId === 'gatling') {
         const b = getAvailableBullet();
         if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 48, false, false, 1, angle, true, false, false, false, false, range);
-    } else if (activeWep.id === 'tesla') {
+    } else if (mercWepId === 'tesla') {
         const b = getAvailableBullet();
         if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 55, false, false, 1, angle, false, true, false, false, false, range);
-    } else if (activeWep.id === 'nuclear') {
+    } else if (mercWepId === 'nuclear') {
         const b = getAvailableBullet();
         if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 10, false, false, 1, angle, false, false, true, false, false, range);
-    } else if (activeWep.id === 'rifle') {
+    } else if (mercWepId === 'rifle') {
         const b = getAvailableBullet();
         if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 52, false, false, 1, angle, false, false, false, false, false, range);
-    } else if (activeWep.id === 'smg') {
+    } else if (mercWepId === 'smg') {
         const b = getAvailableBullet();
         if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 42, false, false, 1, angle, false, false, false, false, false, range);
-    } else if (activeWep.id === 'pistol') {
+    } else if (mercWepId === 'pistol') {
         const b = getAvailableBullet();
         if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 38, false, false, 1, angle, false, false, false, false, false, range);
     } else {
@@ -561,14 +610,23 @@ export function shootMercenary(m, fireInterval) {
         if (b) b.spawn(startX, startY, 0, 0, finalDamage, isCrit, 38, false, false, 1, angle, false, false, false, false, false, range);
     }
     
-    spawnMuzzleSparks(startX, startY, mercAngle, activeWep.id);
+    spawnMuzzleSparks(startX, startY, mercAngle, mercWepId);
     
-    if (activeWep.id !== 'flame' && activeWep.id !== 'plasma' && activeWep.id !== 'tesla') {
+    if (mercWepId !== 'flame' && mercWepId !== 'plasma' && mercWepId !== 'tesla') {
         const p = getAvailableParticle();
         if (p) {
             const shellAngle = mercAngle - Math.PI/2 - (Math.random() * 0.4);
             p.spawn(startX - Math.cos(mercAngle) * 8, startY - Math.sin(mercAngle) * 8, Math.cos(shellAngle) * 2.2, Math.sin(shellAngle) * 1.5, '#eab308', 1.8, 1.5, 0.28, 'shell', 12, 3.5 + Math.random()*2.0);
         }
+    }
+
+    playShootSound(mercWepId);
+
+    m.currentClip--;
+    if (m.currentClip <= 0) {
+        m.isReloading = true;
+        m.reloadTimer = mercWep.reloadTime * getReloadTimeModifier();
+        playReloadSound();
     }
 }
 
