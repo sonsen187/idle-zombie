@@ -19,6 +19,7 @@ export class Zombie {
         this.vz = 0;
         
         const scaleMult = Math.pow(1.18, wave - 1);
+        const bossHpScale = Math.pow(1.24, wave - 1) * (1 + wave * 0.05);
         
         const isGolden = !isBoss && (Math.random() < 0.08); 
         const normalTypes = ['normal', 'runner', 'armored', 'toxic', 'necromancer'];
@@ -44,6 +45,7 @@ export class Zombie {
         this.summonProgress = 0;
         this.armorBroken = false;
         this.damageResistance = 1.0;
+        this.hasPsionicShield = false;
         
         if (this.type === 'runner') {
             hpMultiplier = 0.6;
@@ -80,36 +82,38 @@ export class Zombie {
             const bossTypes = ['Butcher', 'Titan Armored', 'Overlord'];
             this.bossType = bossTypes[Math.floor(Math.random() * bossTypes.length)];
             
-            this.damageResistance = 0.70; // Takes 30% less damage
-            
             if (this.bossType === 'Titan Armored') {
                 hpMultiplier = 38.0;
                 speedMultiplier = 0.45;
                 dmgMultiplier = 2.6;
                 goldMultiplier = 3.5;
                 this.name = "Boss Titan Thiết Giáp";
+                this.damageResistance = 0.40; // Takes 60% less damage due to armor
             } else if (this.bossType === 'Butcher') {
                 hpMultiplier = 24.0;
                 speedMultiplier = 0.75;
                 dmgMultiplier = 2.0;
                 goldMultiplier = 2.4;
                 this.name = "Boss Đồ Tể Cuồng Loạn";
+                this.damageResistance = 0.70; // Takes 30% less damage
             } else {
                 hpMultiplier = 20.0;
                 speedMultiplier = 0.85;
                 dmgMultiplier = 1.5;
                 goldMultiplier = 2.6;
                 this.name = "Boss Chúa Tể Ám Ảnh";
+                this.damageResistance = 1.0; // Dynamic shield (85% reduction)
+                this.summonTimer = 2.0;
             }
         } else {
             this.name = "Zombie Thường";
         }
 
         const baseHpValue = isBoss ? 500 : 15;
-        this.maxHp = Math.round(baseHpValue * hpMultiplier * scaleMult);
+        this.maxHp = Math.round(baseHpValue * hpMultiplier * (isBoss ? bossHpScale : scaleMult));
         this.hp = this.maxHp;
         
-        this.speed = (isBoss ? 0.35 : 0.55 + Math.random() * 0.45) * speedMultiplier * (1 + Math.min(0.02 * wave, 0.50));
+        this.speed = (isBoss ? 0.65 : 0.55 + Math.random() * 0.45) * speedMultiplier * (1 + Math.min(0.02 * wave, 0.50));
         
         const goldBoostMult = 1 + ((gameState.statUpgrades.goldBoost || 0) * 0.15);
         const baseGoldValue = isBoss ? 150 : 10;
@@ -235,9 +239,14 @@ export class Zombie {
         }
 
         if (this.isFrozen) {
-            this.freezeTimer -= dt;
-            if (this.freezeTimer <= 0) {
+            if (this.isBoss && this.bossType === 'Titan Armored') {
                 this.isFrozen = false;
+                this.freezeTimer = 0;
+            } else {
+                this.freezeTimer -= dt;
+                if (this.freezeTimer <= 0) {
+                    this.isFrozen = false;
+                }
             }
         }
 
@@ -275,10 +284,11 @@ export class Zombie {
                         if (dy < 0 && b.vy > 0) { // bullet is above us and moving down
                             const distSqr = dx * dx + dy * dy;
                             if (distSqr < scanDistSqr) {
-                                if (Math.random() < 0.40) { // 40% chance
+                                const dodgeChance = (this.isBoss && this.bossType === 'Butcher') ? 0.75 : 0.40;
+                                if (Math.random() < dodgeChance) { // 40% or 75% chance
                                     this.dodgeDirection = Math.random() < 0.5 ? -1 : 1;
                                     this.dodgeDuration = 0.22;
-                                    this.dodgeTimer = (this.isBoss && this.bossType === 'Butcher') ? 0.8 : 1.6;
+                                    this.dodgeTimer = (this.isBoss && this.bossType === 'Butcher') ? 0.6 : 1.6;
                                     
                                     for (let s = 0; s < 4; s++) {
                                         const p = getAvailableParticle();
@@ -330,7 +340,7 @@ export class Zombie {
             }
         }
 
-        // Necromancer Ritual progress
+        // Summoning progress
         if (this.summonProgress > 0) {
             this.summonProgress -= dt;
             
@@ -344,7 +354,7 @@ export class Zombie {
                         this.y + Math.sin(angle) * (this.radius * 0.6), 
                         -Math.cos(angle) * sp * 0.4, 
                         -Math.abs(Math.sin(angle)) * sp * 0.6, 
-                        '#a855f7', 
+                        (this.isBoss && this.bossType === 'Overlord') ? '#c084fc' : '#a855f7', 
                         2.0, 
                         0.6
                     );
@@ -352,20 +362,36 @@ export class Zombie {
             }
             
             if (this.summonProgress <= 0) {
-                const minionCount = Math.random() < 0.45 ? 2 : 1;
-                for (let c = 0; c < minionCount; c++) {
-                    const mType = Math.random() < 0.65 ? 'normal' : 'runner';
-                    const sz = new Zombie(gameState.wave, false, 0);
-                    sz.type = mType;
-                    sz.name = mType === 'runner' ? "Xác Sống Chạy (Triệu Hồi)" : "Xác Sống Nhỏ (Triệu Hồi)";
-                    sz.x = this.x + (Math.random() - 0.5) * 35;
-                    sz.y = this.y - 25 - Math.random() * 15;
-                    sz.speed = sz.speed * 1.15;
-                    sz.maxHp = Math.round(sz.maxHp * 0.65);
-                    sz.hp = sz.maxHp;
-                    sz.goldReward = Math.round(sz.goldReward * 0.35);
-                    zombies.push(sz);
-                    spawnExplosion(sz.x, sz.y, '#581c87', 5);
+                if (this.isBoss && this.bossType === 'Overlord') {
+                    for (let c = 0; c < 3; c++) {
+                        const mType = Math.random() < 0.5 ? 'runner' : 'armored';
+                        const sz = new Zombie(gameState.wave, false, 0);
+                        sz.type = mType;
+                        sz.name = mType === 'runner' ? "Xác Sống Chạy (Triệu Hồi)" : "Xác Sống Thiết Giáp (Triệu Hồi)";
+                        sz.x = this.x + (Math.random() - 0.5) * 60;
+                        sz.y = this.y + 40 + Math.random() * 20;
+                        sz.speed = sz.speed * 1.2;
+                        sz.maxHp = Math.round(sz.maxHp * 0.8);
+                        sz.hp = sz.maxHp;
+                        zombies.push(sz);
+                        spawnExplosion(sz.x, sz.y, '#6b21a8', 6);
+                    }
+                } else {
+                    const minionCount = Math.random() < 0.45 ? 2 : 1;
+                    for (let c = 0; c < minionCount; c++) {
+                        const mType = Math.random() < 0.65 ? 'normal' : 'runner';
+                        const sz = new Zombie(gameState.wave, false, 0);
+                        sz.type = mType;
+                        sz.name = mType === 'runner' ? "Xác Sống Chạy (Triệu Hồi)" : "Xác Sống Nhỏ (Triệu Hồi)";
+                        sz.x = this.x + (Math.random() - 0.5) * 35;
+                        sz.y = this.y - 25 - Math.random() * 15;
+                        sz.speed = sz.speed * 1.15;
+                        sz.maxHp = Math.round(sz.maxHp * 0.65);
+                        sz.hp = sz.maxHp;
+                        sz.goldReward = Math.round(sz.goldReward * 0.35);
+                        zombies.push(sz);
+                        spawnExplosion(sz.x, sz.y, '#581c87', 5);
+                    }
                 }
             }
         }
@@ -380,19 +406,47 @@ export class Zombie {
             }
         }
 
+        if (this.isBoss && this.bossType === 'Overlord' && this.summonProgress <= 0) {
+            this.summonTimer -= dt;
+            if (this.summonTimer <= 0) {
+                this.summonTimer = 4.0;
+                this.summonProgress = 1.2;
+            }
+        }
+
+        // Overlord shield activation state check
+        if (this.isBoss && this.bossType === 'Overlord') {
+            if (this.summonProgress > 0 || this.hp < this.maxHp * 0.7) {
+                this.hasPsionicShield = true;
+                this.damageResistance = 0.15;
+            } else {
+                this.hasPsionicShield = false;
+                this.damageResistance = 1.0;
+            }
+        }
+
         let currentSpeed = this.speed;
         if (this.isFrozen) {
-            currentSpeed *= 0.35;
+            if (this.isBoss && this.bossType === 'Butcher') {
+                currentSpeed *= 0.85; // 50% slow/freeze resistance
+            } else if (this.isBoss && this.bossType === 'Titan Armored') {
+                currentSpeed *= 1.0; // Completely immune to slow/freeze
+            } else {
+                currentSpeed *= 0.35;
+            }
         }
         if (this.summonProgress > 0) {
             currentSpeed = 0;
         }
 
-        const stopY = barricadeY - 32;
+        const stopY = (this.isBoss && this.bossType === 'Overlord') ? barricadeY - 200 : barricadeY - 32;
         if (this.y + this.radius < stopY) {
             this.y += currentSpeed * dt * 60;
         } else {
-            if (this.impulseY >= 0) {
+            if (this.isBoss && this.bossType === 'Overlord') {
+                this.y = stopY - this.radius;
+                this.impulseY = 0;
+            } else if (this.impulseY >= 0) {
                 this.y = stopY - this.radius;
                 this.impulseY = 0;
                 
@@ -403,6 +457,12 @@ export class Zombie {
                     let finalDmg = this.damage;
                     if (this.type === 'toxic') {
                         finalDmg = Math.round(finalDmg * 1.25);
+                    }
+                    if (this.isBoss && this.bossType === 'Titan Armored') {
+                        finalDmg = Math.round(finalDmg * 2.0); // Ground slam!
+                    }
+                    if (this.isBoss && this.bossType === 'Butcher' && this.isEnraged) {
+                        this.attackCooldown = 0.4; // Berserk attack speed
                     }
                     
                     if (hooks.attackBarricade) {
@@ -428,6 +488,20 @@ export class Zombie {
             amount = Math.max(1, Math.round(amount * 0.5));
         }
 
+        // Overlord teleportation on heavy hit
+        if (this.isBoss && this.bossType === 'Overlord' && amount > this.maxHp * 0.05 && Math.random() < 0.5) {
+            const oldX = this.x;
+            const oldY = this.y;
+            this.x = canvas.clientWidth * (0.25 + Math.random() * 0.5);
+            
+            for (let pIdx = 0; pIdx < 8; pIdx++) {
+                const p1 = getAvailableParticle();
+                if (p1) p1.spawn(oldX, oldY, (Math.random()-0.5)*4, (Math.random()-0.5)*4, '#a855f7', 2.0, 0.5);
+                const p2 = getAvailableParticle();
+                if (p2) p2.spawn(this.x, this.y, (Math.random()-0.5)*4, (Math.random()-0.5)*4, '#c084fc', 2.0, 0.5);
+            }
+        }
+
         this.hp -= amount;
         this.flinchTimer = 0.08; 
         
@@ -436,7 +510,8 @@ export class Zombie {
                 this.armorBroken = true;
                 
                 if (this.isBoss && this.bossType === 'Titan Armored') {
-                    this.speed *= 1.8;
+                    this.speed *= 2.2; // Speed increases by 2.2x
+                    this.damageResistance = 0.85; // Less resistant after armor sheds
                     for (let s = 0; s < 12; s++) {
                         const rp = getAvailableParticle();
                         if (rp) {
@@ -470,14 +545,21 @@ export class Zombie {
             }
         }
 
-        if (this.hp > 0 && this.hp < this.maxHp * 0.45 && !this.isEnraged) {
+        const enrageThreshold = (this.isBoss && this.bossType === 'Butcher') ? 0.60 : 0.45;
+        if (this.hp > 0 && this.hp < this.maxHp * enrageThreshold && !this.isEnraged) {
             this.isEnraged = true;
             if (this.isBoss) {
-                this.speed *= 1.6;
+                if (this.bossType === 'Butcher') {
+                    this.speed *= 2.0;
+                    this.attackCooldown = 0.4;
+                } else {
+                    this.speed *= 1.6;
+                    this.attackCooldown *= 0.75;
+                }
             } else {
                 this.speed *= 1.35;
+                this.attackCooldown *= 0.75;
             }
-            this.attackCooldown *= 0.75;
             
             for (let r = 0; r < 5; r++) {
                 const rp = getAvailableParticle();
@@ -490,6 +572,10 @@ export class Zombie {
         }
         
         if (knockbackForce > 0) {
+            if (this.isBoss && this.bossType === 'Titan Armored') {
+                knockbackForce = 0;
+            }
+            
             let mass = 1.0;
             if (this.isBoss) {
                 mass = 25.0;
@@ -695,6 +781,23 @@ export class Zombie {
             } else if (this.type === 'golden') {
                 g.lineStyle(2.0, 0xfacc15, 0.5 + Math.sin(Date.now() * 0.015) * 0.22);
                 g.drawCircle(0, -this.radius * 0.45, this.radius * 1.45);
+            } else if (this.isBoss && this.bossType === 'Overlord') {
+                if (this.hasPsionicShield) {
+                    // Glowing magical circle under feet
+                    const pulseRad = this.radius * (1.8 + Math.sin(Date.now() * 0.02) * 0.15);
+                    g.lineStyle(2.5, 0xd8b4fe, 0.75 + Math.sin(Date.now() * 0.015) * 0.15);
+                    g.drawEllipse(0, this.radius * 0.95, pulseRad, pulseRad * 0.4);
+                    g.endFill();
+                    
+                    // Psionic purple shield bubble
+                    g.lineStyle(2.2, 0xc084fc, 0.85);
+                    g.beginFill(0xa855f7, 0.22);
+                    g.drawCircle(0, -this.radius * 0.45, this.radius * 1.6);
+                    g.endFill();
+                } else {
+                    g.lineStyle(1.8, 0xa855f7, 0.4 + Math.sin(Date.now() * 0.01) * 0.15);
+                    g.drawCircle(0, -this.radius * 0.45, this.radius * 1.5);
+                }
             }
         }
         
