@@ -382,6 +382,7 @@ export function updateMercenary(m, dt) {
         m.isReloading = false;
         m.reloadTimer = 0;
         m.lastWeaponId = 'pistol';
+        m.patrolTargetX = null;
     }
 
     const mercWepId = getMercenaryWeaponId(m.id);
@@ -414,7 +415,12 @@ export function updateMercenary(m, dt) {
     
     if (m.id === 'merc_drone') {
         const homeX = canvas.clientWidth * 0.92;
-        m.targetX = target ? target.x : homeX;
+        if (target) {
+            m.targetX = target.x;
+        } else {
+            // Hover patrol: gentle sine wave movement around homeX
+            m.targetX = homeX + Math.sin(Date.now() * 0.001) * 60;
+        }
         m.targetX = Math.max(canvas.clientWidth * 0.60, Math.min(canvas.clientWidth * 0.96, m.targetX));
         
         const dx = m.targetX - m.x;
@@ -435,14 +441,23 @@ export function updateMercenary(m, dt) {
         else if (m.id === 'merc_medic') homeX = canvas.clientWidth * 0.80;
         
         if (target) {
+            m.patrolTargetX = null;
             m.targetX = target.x;
             m.targetX = Math.max(homeX - 110, Math.min(homeX + 110, m.targetX));
             m.angle = Math.atan2(target.y - m.y, target.x - m.x);
             m.screenAngle = m.angle;
         } else {
-            m.targetX = homeX;
-            m.angle = m.angle * 0.95 + (-Math.PI / 2) * 0.05;
-            m.screenAngle = m.screenAngle * 0.95 + (-Math.PI / 2) * 0.05;
+            // Continuous patrol back and forth around homeX
+            if (!m.patrolTargetX || Math.abs(m.patrolTargetX - m.x) < 8) {
+                m.patrolTargetX = homeX + (Math.random() - 0.5) * 180;
+            }
+            m.targetX = m.patrolTargetX;
+            
+            // Turn face direction slightly towards the patrol destination
+            const walkDir = Math.sign(m.targetX - m.x);
+            const patrolAngle = -Math.PI / 2 + walkDir * 0.25;
+            m.angle = m.angle * 0.95 + patrolAngle * 0.05;
+            m.screenAngle = m.screenAngle * 0.95 + patrolAngle * 0.05;
         }
         
         const dx = m.targetX - m.x;
