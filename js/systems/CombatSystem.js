@@ -418,8 +418,8 @@ export function updateMercenary(m, dt) {
         if (target) {
             m.targetX = target.x;
         } else {
-            // Hover patrol: gentle sine wave movement around homeX
-            m.targetX = homeX + Math.sin(Date.now() * 0.001) * 60;
+            // Hover patrol: gentle sine wave movement around homeX with expanded range
+            m.targetX = homeX + Math.sin(Date.now() * 0.0006) * 150;
         }
         m.targetX = Math.max(canvas.clientWidth * 0.60, Math.min(canvas.clientWidth * 0.96, m.targetX));
         
@@ -447,9 +447,11 @@ export function updateMercenary(m, dt) {
             m.angle = Math.atan2(target.y - m.y, target.x - m.x);
             m.screenAngle = m.angle;
         } else {
-            // Continuous patrol back and forth around homeX
+            // Continuous patrol across the entire barricade
             if (!m.patrolTargetX || Math.abs(m.patrolTargetX - m.x) < 8) {
-                m.patrolTargetX = homeX + (Math.random() - 0.5) * 180;
+                const minX = canvas.clientWidth * 0.10;
+                const maxX = canvas.clientWidth * 0.90;
+                m.patrolTargetX = minX + Math.random() * (maxX - minX);
             }
             m.targetX = m.patrolTargetX;
             
