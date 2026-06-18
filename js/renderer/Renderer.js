@@ -474,6 +474,19 @@ export function drawPlayerPixi() {
     g.moveTo(-3, 1);
     g.lineTo(3, 1);
     
+    // Cánh tay cầm súng hướng theo player.screenAngle
+    const armAngle = player.screenAngle || player.angle;
+    const armLen = 13;
+    // Vị trí bàn tay cầm súng
+    const handX = Math.cos(armAngle) * armLen;
+    const handY = -4 + Math.sin(armAngle) * armLen;
+    
+    g.lineStyle(3.5, 0x334155); // Vai áo
+    g.moveTo(-6, -4); // Vai trái
+    g.lineTo(handX, handY);
+    g.moveTo(6, -4);  // Vai phải
+    g.lineTo(handX, handY);
+    
     // Draw Head/Helmet (Nhìn từ sau lưng)
     g.lineStyle(0);
     g.beginFill(0x1e293b); // Mũ bảo hiểm xám đen
@@ -484,19 +497,6 @@ export function drawPlayerPixi() {
     g.lineStyle(1.2, 0x0f172a);
     g.moveTo(-4.5, -9);
     g.lineTo(4.5, -9);
-    
-    // Cánh tay cầm súng hướng theo player.screenAngle
-    const armAngle = player.screenAngle || player.angle;
-    const armLen = 10;
-    // Vị trí bàn tay cầm súng
-    const handX = Math.cos(armAngle) * armLen;
-    const handY = -4 + Math.sin(armAngle) * armLen;
-    
-    g.lineStyle(3.5, 0x334155); // Vai áo
-    g.moveTo(-6, -4); // Vai trái
-    g.lineTo(handX, handY);
-    g.moveTo(6, -4);  // Vai phải
-    g.lineTo(handX, handY);
     
     const activeWep = gameState.weapons[gameState.activeWeaponIndex];
     if (activeWep) {
@@ -807,16 +807,7 @@ export function drawMercsPixi() {
             g.moveTo(-3, 1);
             g.lineTo(3, 1);
             
-            g.lineStyle(0);
-            g.beginFill(helmetColor);
-            g.drawCircle(0, -11, 6.2);
-            g.endFill();
-            
-            g.lineStyle(1.2, 0x0f172a);
-            g.moveTo(-4.5, -9);
-            g.lineTo(4.5, -9);
-            
-            const armLen = 10;
+            const armLen = 13;
             const handX = Math.cos(mercAim) * armLen;
             const handY = -4 + Math.sin(mercAim) * armLen;
             
@@ -825,6 +816,15 @@ export function drawMercsPixi() {
             g.lineTo(handX, handY);
             g.moveTo(6, -4);
             g.lineTo(handX, handY);
+
+            g.lineStyle(0);
+            g.beginFill(helmetColor);
+            g.drawCircle(0, -11, 6.2);
+            g.endFill();
+            
+            g.lineStyle(1.2, 0x0f172a);
+            g.moveTo(-4.5, -9);
+            g.lineTo(4.5, -9);
             
             let gunW = 4, gunH = 12, gunColor = 0x1e293b, barrelExt = 5;
             switch (mercWepId) {
